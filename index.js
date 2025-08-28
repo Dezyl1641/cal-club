@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const jwtMiddleware = require('./middleware/auth');
 const setupRoutes = require('./routes/index');

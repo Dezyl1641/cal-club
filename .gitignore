@@ -159,6 +159,9 @@ build/
 dist/
 out/
 
+# BFG Repo-Cleaner reports
+.bfg-report/
+
 # Test files
 test-results/
 coverage/

@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const twilio = require('twilio');
 const {
   findUserByPhone,
   createUser,
@@ -11,10 +10,6 @@ const {
 const parseBody = require('../utils/parseBody');
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
-const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
 class AuthService {
   static generateOtp(phone) {
@@ -23,13 +18,7 @@ class AuthService {
     return cleanPhone.slice(-6); // Get last 6 digits
   }
 
-  static async sendOtpViaSms(phone, otp) {
-    return twilioClient.messages.create({
-      body: `Your OTP is ${otp}`,
-      from: TWILIO_PHONE_NUMBER,
-      to: phone
-    });
-  }
+
 
   static async requestOtp(phone) {
     const otp = this.generateOtp(phone);
@@ -41,10 +30,7 @@ class AuthService {
     // Store OTP
     await storeOtp(phone, otp, userId);
     
-    // Send SMS
-    await this.sendOtpViaSms(phone, otp);
-    
-    return { message: 'OTP sent via SMS', phone };
+    return { message: 'OTP generated and stored', phone, otp };
   }
 
   static async verifyOtp(phone, otp) {
