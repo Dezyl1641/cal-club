@@ -2,8 +2,8 @@ const { OpenAI } = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Meal = require('../models/schemas/Meal');
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '***OPENAI_API_KEY_REMOVED***';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '***GEMINI_API_KEY_REMOVED***';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
