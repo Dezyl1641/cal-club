@@ -123,7 +123,7 @@ class AppFormatService {
     return {
       title: "TrackAI",
       icon: "fire",
-      caloriesBurnt: Math.round(caloriesBurnt)
+      caloriesBurnt: parseFloat(caloriesBurnt.toFixed(2))
     };
   }
 
@@ -158,8 +158,8 @@ class AppFormatService {
           icon: "fire",
           color: "black",
           text: "Calories left",
-          value: Math.round(caloriesLeft),
-          completed: Math.round(caloriesCompleted),
+          value: parseFloat(caloriesLeft.toFixed(2)),
+          completed: parseFloat(caloriesCompleted.toFixed(2)),
           target: goals.dailyCalories
         },
         secondary_cards: [
@@ -167,24 +167,24 @@ class AppFormatService {
             icon: "lightning",
             color: "red",
             text: "Protein",
-            value: Math.round(todayData.totalProtein),
-            completed: Math.round(todayData.totalProtein),
+            value: parseFloat(todayData.totalProtein.toFixed(2)),
+            completed: parseFloat(todayData.totalProtein.toFixed(2)),
             target: goals.dailyProtein
           },
           {
             icon: "wheat",
             color: "brown",
             text: "Carbs",
-            value: Math.round(todayData.totalCarbs),
-            completed: Math.round(todayData.totalCarbs),
+            value: parseFloat(todayData.totalCarbs.toFixed(2)),
+            completed: parseFloat(todayData.totalCarbs.toFixed(2)),
             target: goals.dailyCarbs
           },
           {
             icon: "water",
             color: "blue",
             text: "Fats",
-            value: Math.round(todayData.totalFat),
-            completed: Math.round(todayData.totalFat),
+            value: parseFloat(todayData.totalFat.toFixed(2)),
+            completed: parseFloat(todayData.totalFat.toFixed(2)),
             target: goals.dailyFats
           }
         ]
@@ -212,10 +212,10 @@ class AppFormatService {
       dish_image: meal.photos?.[0]?.url || "",
       dish_name: meal.name || "Unknown Meal",
       time: this.formatTime(meal.capturedAt),
-      calories: Math.round(meal.totalNutrition?.calories?.final || meal.totalNutrition?.calories?.llm || 0),
-      protein: Math.round(meal.totalNutrition?.protein?.final || meal.totalNutrition?.protein?.llm || 0),
-      carbs: Math.round(meal.totalNutrition?.carbs?.final || meal.totalNutrition?.carbs?.llm || 0),
-      fat: Math.round(meal.totalNutrition?.fat?.final || meal.totalNutrition?.fat?.llm || 0)
+      calories: parseFloat((meal.totalNutrition?.calories?.final || meal.totalNutrition?.calories?.llm || 0).toFixed(2)),
+      protein: parseFloat((meal.totalNutrition?.protein?.final || meal.totalNutrition?.protein?.llm || 0).toFixed(2)),
+      carbs: parseFloat((meal.totalNutrition?.carbs?.final || meal.totalNutrition?.carbs?.llm || 0).toFixed(2)),
+      fat: parseFloat((meal.totalNutrition?.fat?.final || meal.totalNutrition?.fat?.llm || 0).toFixed(2))
     }));
     
     return {

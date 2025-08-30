@@ -1,5 +1,6 @@
 const AiService = require('../services/aiService');
 const parseBody = require('../utils/parseBody');
+const mealFormatter = require('../utils/mealFormatter');
 
 function foodCalories(req, res) {
   parseBody(req, async (err, data) => {
@@ -19,6 +20,20 @@ function foodCalories(req, res) {
 
     try {
       const result = await AiService.analyzeFoodCalories(data.url, provider, req.user.userId, additionalData);
+      
+      // If a meal was saved, format it according to the new response format
+      if (result.mealId) {
+        const Meal = require('../models/schemas/Meal');
+        const meal = await Meal.findById(result.mealId);
+        if (meal) {
+          const formattedResponse = mealFormatter.formatMealResponse(meal);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(formattedResponse));
+          return;
+        }
+      }
+      
+      // Fallback to original response if no meal was saved
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     } catch (error) {

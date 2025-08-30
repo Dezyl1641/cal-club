@@ -313,10 +313,10 @@ Return only valid JSON, no additional text.`
   static calculateTotalNutrition(items) {
     return items.reduce((total, item) => {
       return {
-        calories: (total.calories || 0) + (item.nutrition.calories || 0),
-        protein: (total.protein || 0) + (item.nutrition.protein || 0),
-        carbs: (total.carbs || 0) + (item.nutrition.carbs || 0),
-        fat: (total.fat || 0) + (item.nutrition.fat || 0)
+        calories: parseFloat(((total.calories || 0) + (item.nutrition.calories || 0)).toFixed(2)),
+        protein: parseFloat(((total.protein || 0) + (item.nutrition.protein || 0)).toFixed(2)),
+        carbs: parseFloat(((total.carbs || 0) + (item.nutrition.carbs || 0)).toFixed(2)),
+        fat: parseFloat(((total.fat || 0) + (item.nutrition.fat || 0)).toFixed(2))
       };
     }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
   }
@@ -324,8 +324,8 @@ Return only valid JSON, no additional text.`
   static extractCaloriesFromAIResult(aiResult) {
     // Simple regex to extract calories from AI response
     // This can be enhanced based on your specific AI response format
-    const calorieMatch = aiResult.match(/(\d+)\s*calories?/i);
-    return calorieMatch ? parseInt(calorieMatch[1]) : null;
+    const calorieMatch = aiResult.match(/(\d+(?:\.\d+)?)\s*calories?/i);
+    return calorieMatch ? parseFloat(calorieMatch[1]) : null;
   }
 }
 

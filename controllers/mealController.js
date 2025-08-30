@@ -1,6 +1,7 @@
 const MealService = require('../services/mealService');
 const Meal = require('../models/schemas/Meal');
 const parseBody = require('../utils/parseBody');
+const mealFormatter = require('../utils/mealFormatter');
 
 function createMeal(req, res) {
   parseBody(req, async (err, mealData) => {
@@ -103,20 +104,19 @@ async function updateMeal(req, res) {
         };
 
         // Update final nutrition proportionally
-        item.nutrition.calories.final = Math.round(item.nutrition.calories.llm * ratio);
-        item.nutrition.protein.final = Math.round(item.nutrition.protein.llm * ratio);
-        item.nutrition.carbs.final = Math.round(item.nutrition.carbs.llm * ratio);
-        item.nutrition.fat.final = Math.round(item.nutrition.fat.llm * ratio);
+        item.nutrition.calories.final = parseFloat((item.nutrition.calories.llm * ratio).toFixed(2));
+        item.nutrition.protein.final = parseFloat((item.nutrition.protein.llm * ratio).toFixed(2));
+        item.nutrition.carbs.final = parseFloat((item.nutrition.carbs.llm * ratio).toFixed(2));
+        item.nutrition.fat.final = parseFloat((item.nutrition.fat.llm * ratio).toFixed(2));
 
         // Recompute total nutrition
         const updatedMeal = await recomputeTotalNutrition(meal);
         await updatedMeal.save();
 
+        // Format response according to new format
+        const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          message: 'Meal updated successfully', 
-          meal: updatedMeal 
-        }));
+        res.end(JSON.stringify(formattedResponse));
         return;
       }
 
@@ -153,11 +153,10 @@ async function updateMeal(req, res) {
         const updatedMeal = await recomputeTotalNutrition(meal);
         await updatedMeal.save();
 
+        // Format response according to new format
+        const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          message: 'Meal updated successfully', 
-          meal: updatedMeal 
-        }));
+        res.end(JSON.stringify(formattedResponse));
         return;
       }
 
@@ -253,17 +252,17 @@ async function recomputeTotalNutrition(meal) {
     const carbs = item.nutrition.carbs.final !== null ? item.nutrition.carbs.final : item.nutrition.carbs.llm;
     const fat = item.nutrition.fat.final !== null ? item.nutrition.fat.final : item.nutrition.fat.llm;
 
-    totalCalories += calories || 0;
-    totalProtein += protein || 0;
-    totalCarbs += carbs || 0;
-    totalFat += fat || 0;
+    totalCalories += parseFloat(calories || 0);
+    totalProtein += parseFloat(protein || 0);
+    totalCarbs += parseFloat(carbs || 0);
+    totalFat += parseFloat(fat || 0);
   });
 
-  // Update total nutrition
-  meal.totalNutrition.calories.final = totalCalories;
-  meal.totalNutrition.protein.final = totalProtein;
-  meal.totalNutrition.carbs.final = totalCarbs;
-  meal.totalNutrition.fat.final = totalFat;
+  // Update total nutrition with 2 decimal precision
+  meal.totalNutrition.calories.final = parseFloat(totalCalories.toFixed(2));
+  meal.totalNutrition.protein.final = parseFloat(totalProtein.toFixed(2));
+  meal.totalNutrition.carbs.final = parseFloat(totalCarbs.toFixed(2));
+  meal.totalNutrition.fat.final = parseFloat(totalFat.toFixed(2));
 
   return meal;
 }
