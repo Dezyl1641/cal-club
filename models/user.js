@@ -29,6 +29,7 @@ async function storeOtp(phone, otp, userId = null) {
   );
 }
 
+//otp
 async function fetchOtp(phone) {
   const otpDoc = await UserOtp.findOne({ phone });
   return otpDoc ? otpDoc.otp : null;
