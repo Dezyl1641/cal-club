@@ -1,4 +1,5 @@
 const MealService = require('../services/mealService');
+const Meal = require('../models/schemas/Meal');
 const parseBody = require('../utils/parseBody');
 
 function createMeal(req, res) {
@@ -58,26 +59,113 @@ async function getMealById(req, res) {
   }
 }
 
-function updateMeal(req, res) {
-  const mealId = req.url.split('/')[2]; // Extract ID from /meals/:id
-
-  parseBody(req, async (err, updateData) => {
-    if (err) {
+// Update meal endpoint
+async function updateMeal(req, res) {
+  parseBody(req, async (err, data) => {
+    if (err || !data.mealId || !data.itemId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Invalid request body' }));
+      res.end(JSON.stringify({ error: 'mealId and itemId are required' }));
       return;
     }
 
     try {
-      const meal = await MealService.updateMeal(req.user.userId, mealId, updateData);
+      const { mealId, itemId, newQuantity, newItem } = data;
+      const userId = req.user.userId;
+
+      // Get the meal and verify ownership
+      const meal = await Meal.findOne({ _id: mealId, userId });
       if (!meal) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Meal not found' }));
         return;
       }
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(meal));
+
+      // Find the item to update
+      const itemIndex = meal.items.findIndex(item => item.id === itemId);
+      if (itemIndex === -1) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Item not found in meal' }));
+        return;
+      }
+
+      const item = meal.items[itemIndex];
+
+      // Case 1: Only quantity update (newQuantity is non-null, newItem is null)
+      if (newQuantity !== null && newItem === null) {
+        // Update quantity and recalculate nutrition proportionally
+        const oldQuantity = item.quantity.llm.value;
+        const ratio = newQuantity / oldQuantity;
+
+        // Update final quantity
+        item.quantity.final = {
+          value: newQuantity,
+          unit: item.quantity.llm.unit
+        };
+
+        // Update final nutrition proportionally
+        item.nutrition.calories.final = Math.round(item.nutrition.calories.llm * ratio);
+        item.nutrition.protein.final = Math.round(item.nutrition.protein.llm * ratio);
+        item.nutrition.carbs.final = Math.round(item.nutrition.carbs.llm * ratio);
+        item.nutrition.fat.final = Math.round(item.nutrition.fat.llm * ratio);
+
+        // Recompute total nutrition
+        const updatedMeal = await recomputeTotalNutrition(meal);
+        await updatedMeal.save();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Meal updated successfully', 
+          meal: updatedMeal 
+        }));
+        return;
+      }
+
+      // Case 2: Item name update (newItem is non-null)
+      if (newItem !== null) {
+        // Get AI nutrition for the new item and updated meal name
+        const originalUnit = item.quantity.llm.unit;
+        const aiResult = await getNutritionForItem(newItem, meal.name, item.name.llm, originalUnit);
+        
+        // Update item name and quantity
+        item.name.final = aiResult.name;
+        item.quantity.llm = {
+          value: newQuantity !== null ? newQuantity : aiResult.quantity.value,
+          unit: aiResult.quantity.unit
+        };
+
+        // Update new item nutrition
+        item.nutrition.calories.llm = aiResult.nutrition.calories;
+        item.nutrition.protein.llm = aiResult.nutrition.protein;
+        item.nutrition.carbs.llm = aiResult.nutrition.carbs;
+        item.nutrition.fat.llm = aiResult.nutrition.fat;
+        // Set final values as null because this is a new item
+        item.nutrition.calories.final = null;
+        item.nutrition.protein.final = null;
+        item.nutrition.carbs.final = null;
+        item.nutrition.fat.final = null;
+
+        // Update overall meal name if provided by AI
+        if (aiResult.updatedMealName) {
+          meal.name = aiResult.updatedMealName;
+        }
+
+        // Recompute total nutrition
+        const updatedMeal = await recomputeTotalNutrition(meal);
+        await updatedMeal.save();
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          message: 'Meal updated successfully', 
+          meal: updatedMeal 
+        }));
+        return;
+      }
+
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Either newQuantity or newItem must be provided' }));
+
     } catch (error) {
+      console.error('Error updating meal:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to update meal', details: error.message }));
     }
@@ -148,6 +236,62 @@ async function getCalendarData(req, res) {
   } catch (error) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch calendar data', details: error.message }));
+  }
+}
+
+// Helper function to recompute total nutrition
+async function recomputeTotalNutrition(meal) {
+  let totalCalories = 0;
+  let totalProtein = 0;
+  let totalCarbs = 0;
+  let totalFat = 0;
+
+  meal.items.forEach(item => {
+    // Use final values if available, otherwise fallback to llm values
+    const calories = item.nutrition.calories.final !== null ? item.nutrition.calories.final : item.nutrition.calories.llm;
+    const protein = item.nutrition.protein.final !== null ? item.nutrition.protein.final : item.nutrition.protein.llm;
+    const carbs = item.nutrition.carbs.final !== null ? item.nutrition.carbs.final : item.nutrition.carbs.llm;
+    const fat = item.nutrition.fat.final !== null ? item.nutrition.fat.final : item.nutrition.fat.llm;
+
+    totalCalories += calories || 0;
+    totalProtein += protein || 0;
+    totalCarbs += carbs || 0;
+    totalFat += fat || 0;
+  });
+
+  // Update total nutrition
+  meal.totalNutrition.calories.final = totalCalories;
+  meal.totalNutrition.protein.final = totalProtein;
+  meal.totalNutrition.carbs.final = totalCarbs;
+  meal.totalNutrition.fat.final = totalFat;
+
+  return meal;
+}
+
+// Helper function to get nutrition for a new item via AI
+async function getNutritionForItem(newItemName, currentMealName, previousItemName, originalUnit) {
+  const AiService = require('../services/aiService');
+
+  try {
+    // Use OpenAI for this analysis
+    const result = await AiService.analyzeFoodItemWithOpenAI(newItemName, currentMealName, previousItemName, originalUnit);
+    const parsedResult = JSON.parse(result);
+    console.log('parsedResult', JSON.stringify(parsedResult));
+    return {
+      name: parsedResult.name,
+      quantity: parsedResult.quantity,
+      nutrition: parsedResult.nutrition,
+      updatedMealName: parsedResult.updatedMealName
+    };
+  } catch (error) {
+    console.error('Error getting AI nutrition:', error);
+    // Return default values if AI fails
+    return {
+      name: newItemName,
+      quantity: { value: 1, unit: 'serving' },
+      nutrition: { calories: 100, protein: 5, carbs: 15, fat: 3 },
+      updatedMealName: currentMealName // Keep original name if AI fails
+    };
   }
 }
 
