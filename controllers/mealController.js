@@ -52,8 +52,11 @@ async function getMealById(req, res) {
       res.end(JSON.stringify({ error: 'Meal not found' }));
       return;
     }
+    
+    // Format response according to new format
+    const formattedResponse = mealFormatter.formatMealResponse(meal);
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(meal));
+    res.end(JSON.stringify(formattedResponse));
   } catch (error) {
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch meal', details: error.message }));
@@ -63,6 +66,7 @@ async function getMealById(req, res) {
 // Update meal endpoint
 async function updateMeal(req, res) {
   parseBody(req, async (err, data) => {
+    console.log('data' + JSON.stringify(data));
     if (err || !data.mealId || !data.itemId) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'mealId and itemId are required' }));
@@ -90,9 +94,9 @@ async function updateMeal(req, res) {
       }
 
       const item = meal.items[itemIndex];
-
+      console.log('newItem: ' + newItem);
       // Case 1: Only quantity update (newQuantity is non-null, newItem is null)
-      if (newQuantity !== null && newItem === null) {
+      if (newQuantity !== null && !newItem) {
         // Update quantity and recalculate nutrition proportionally
         const oldQuantity = item.quantity.llm.value;
         const ratio = newQuantity / oldQuantity;

@@ -16,10 +16,13 @@ class MealService {
     let dateFilter = {};
     
     if (date) {
-      // Single day filter
-      const startDate = new Date(date);
-      const endDate = new Date(date);
-      endDate.setDate(endDate.getDate() + 1);
+      // Single day filter - handle local timezone properly
+      const [year, month, day] = date.split('-').map(Number);
+      const startDate = new Date(year, month - 1, day, 0, 0, 0, 0); // Local midnight
+      const endDate = new Date(year, month - 1, day + 1, 0, 0, 0, 0); // Next day local midnight
+      
+      console.log(`[Timezone Debug] Date filter - Date: ${date}, Start: ${startDate.toISOString()}, End: ${endDate.toISOString()}`);
+      
       dateFilter = {
         capturedAt: {
           $gte: startDate,
@@ -73,9 +76,23 @@ class MealService {
   }
 
   static async getDailySummary(userId, startDate, endDate) {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setDate(end.getDate() + 1); // Make end date exclusive
+    // Handle date strings properly to avoid timezone issues
+    let start, end;
+    
+    if (typeof startDate === 'string') {
+      const [year, month, day] = startDate.split('-').map(Number);
+      start = new Date(year, month - 1, day, 0, 0, 0, 0); // Local midnight
+    } else {
+      start = new Date(startDate);
+    }
+    
+    if (typeof endDate === 'string') {
+      const [year, month, day] = endDate.split('-').map(Number);
+      end = new Date(year, month - 1, day + 1, 0, 0, 0, 0); // Next day local midnight
+    } else {
+      end = new Date(endDate);
+      end.setDate(end.getDate() + 1); // Make end date exclusive
+    }
 
     return Meal.aggregate([
       {
@@ -125,7 +142,14 @@ class MealService {
 
   static async getCalendarData(userId, date) {
     // Parse the given date and calculate Monday-Sunday week
-    const givenDate = new Date(date);
+    // Handle date string properly to avoid timezone issues
+    let givenDate;
+    if (typeof date === 'string') {
+      const [year, month, day] = date.split('-').map(Number);
+      givenDate = new Date(year, month - 1, day, 12, 0, 0, 0); // Use noon to avoid timezone edge cases
+    } else {
+      givenDate = new Date(date);
+    }
     
     // Calculate Monday of the week (0 = Sunday, 1 = Monday, etc.)
     const dayOfWeek = givenDate.getDay();
@@ -133,9 +157,11 @@ class MealService {
     
     const startDate = new Date(givenDate);
     startDate.setDate(startDate.getDate() - daysToMonday); // Go back to Monday
+    startDate.setHours(0, 0, 0, 0); // Set to local midnight
     
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 7); // Add 7 days to get end of week (next Monday)
+    endDate.setHours(0, 0, 0, 0); // Set to local midnight
 
     return Meal.aggregate([
       {

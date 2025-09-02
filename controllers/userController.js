@@ -67,6 +67,38 @@ function updateUserProfile(req, res) {
   });
 }
 
+async function deleteUser(req, res) {
+  parseBody(req, async (err, data) => {
+    if (err || !data.phone) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Phone number is required' }));
+      return;
+    }
+
+    try {
+      const { deactivateUserByPhone } = require('../models/user');
+      const result = await deactivateUserByPhone(data.phone);
+      
+      if (!result) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'User not found or already deactivated' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        message: 'User deactivated successfully',
+        phone: data.phone,
+        isActive: false
+      }));
+    } catch (error) {
+      console.error('Error deactivating user:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to deactivate user', details: error.message }));
+    }
+  });
+}
+
 function validateGoals(goals) {
   const errors = [];
   
@@ -97,4 +129,7 @@ function validateGoals(goals) {
   return errors;
 }
 
-module.exports = { updateUserProfile }; 
+module.exports = { 
+  updateUserProfile,
+  deleteUser
+}; 

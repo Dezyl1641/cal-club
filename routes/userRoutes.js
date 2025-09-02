@@ -1,7 +1,8 @@
 const userController = require('../controllers/userController');
 
 const routes = {
-  'PATCH /users/profile': userController.updateUserProfile
+  'PATCH /users/profile': userController.updateUserProfile,
+  'DELETE /users': userController.deleteUser
 };
 
 function userRoutes(req, res) {

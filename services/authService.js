@@ -40,19 +40,27 @@ class AuthService {
       throw new Error('Invalid OTP');
     }
 
-    // Find or create user
+    // Check if user exists and is active
     let user = await findUserByPhone(phone);
+    
+    // If user doesn't exist, create a new one
     if (!user) {
       user = await createUser({ phone });
+    } else {
+      // If user exists but is inactive, reactivate them
+      if (!user.isActive) {
+        const { updateUser } = require('../models/user');
+        user = await updateUser(user._id, { isActive: true });
+      }
     }
 
     // Delete OTP after successful verification
     await deleteOtp(phone);
 
-              // Generate and store auth token
-          const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '14d' });
-          const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
-          await storeAuthToken(user._id, token, expiresAt);
+    // Generate and store auth token
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '14d' });
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+    await storeAuthToken(user._id, token, expiresAt);
 
     return { message: 'OTP verified successfully', token };
   }

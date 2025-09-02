@@ -36,6 +36,7 @@ const MacroWidget = {
 };
 
 const LogEntry = {
+  mealId: String,
   dish_image: String,
   dish_name: String,
   time: String,
@@ -209,6 +210,7 @@ class AppFormatService {
     }
     
     const logs = todayMeals.map(meal => ({
+      mealId: meal._id.toString(),
       dish_image: meal.photos?.[0]?.url || "",
       dish_name: meal.name || "Unknown Meal",
       time: this.formatTime(meal.capturedAt),
@@ -240,18 +242,18 @@ class AppFormatService {
         title: "Home",
         action: "navigate_home"
       },
-      {
-        active: false,
-        icon: "progress",
-        title: "Progress",
-        action: "navigate_progress"
-      },
-      {
-        active: false,
-        icon: "settings",
-        title: "Settings",
-        action: "navigate_settings"
-      }
+      // {
+      //   active: false,
+      //   icon: "progress",
+      //   title: "Progress",
+      //   action: "navigate_progress"
+      // },
+      // {
+      //   active: false,
+      //   icon: "settings",
+      //   title: "Settings",
+      //   action: "navigate_settings"
+      // }
     ];
   }
 
@@ -272,7 +274,9 @@ class AppFormatService {
   static async getTodayMeals(userId, currentDate) {
     try {
       const todayString = this.formatDateString(currentDate);
+      console.log(`[Timezone Debug] Current date: ${currentDate}, Formatted string: ${todayString}`);
       const meals = await MealService.getMeals(userId, { date: todayString });
+      console.log(`[Timezone Debug] Found ${meals.length} meals for date: ${todayString}`);
       return meals || [];
     } catch (error) {
       console.error('Failed to fetch today meals:', error);
@@ -281,7 +285,11 @@ class AppFormatService {
   }
 
   static formatDateString(date) {
-    return date.toISOString().split('T')[0];
+    // Use local time instead of UTC to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   static formatTime(date) {

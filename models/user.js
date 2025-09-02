@@ -4,7 +4,7 @@ const UserAuthToken = require('./schemas/UserAuthToken');
 
 // User operations
 async function findUserByPhone(phone) {
-  return User.findOne({ phone });
+  return User.findOne({ phone, isActive: true });
 }
 
 async function findUserById(userId) {
@@ -18,6 +18,14 @@ async function createUser(userData) {
 
 async function updateUser(userId, updateData) {
   return User.findByIdAndUpdate(userId, updateData, { new: true });
+}
+
+async function deactivateUserByPhone(phone) {
+  return User.findOneAndUpdate(
+    { phone, isActive: true },
+    { isActive: false },
+    { new: true }
+  );
 }
 
 // OTP operations (still use phone for OTP)
@@ -78,6 +86,7 @@ module.exports = {
   findUserById,
   createUser,
   updateUser,
+  deactivateUserByPhone,
   storeOtp,
   fetchOtp,
   deleteOtp,
