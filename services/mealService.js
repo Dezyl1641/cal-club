@@ -38,6 +38,7 @@ class MealService {
 
     return Meal.find({
       userId,
+      deletedAt: null,
       ...dateFilter
     })
     .sort({ capturedAt: -1 })
@@ -46,7 +47,7 @@ class MealService {
   }
 
   static async getMealById(userId, mealId) {
-    return Meal.findOne({ _id: mealId, userId });
+    return Meal.findOne({ _id: mealId, userId, deletedAt: null });
   }
 
   static async updateMeal(userId, mealId, updateData) {
@@ -64,15 +65,27 @@ class MealService {
     }
 
     return Meal.findOneAndUpdate(
-      { _id: mealId, userId },
+      { _id: mealId, userId, deletedAt: null },
       updateData,
       { new: true }
     );
   }
 
   static async deleteMeal(userId, mealId) {
-    // Hard delete - just remove the document
-    return Meal.findOneAndDelete({ _id: mealId, userId });
+    // Soft delete - set deletedAt timestamp
+    return Meal.findOneAndUpdate(
+      { _id: mealId, userId, deletedAt: null },
+      { deletedAt: new Date() },
+      { new: true }
+    );
+  }
+
+  static async deleteAllMealsForUser(userId) {
+    // Soft delete all meals for a user
+    return Meal.updateMany(
+      { userId, deletedAt: null },
+      { deletedAt: new Date() }
+    );
   }
 
   static async getDailySummary(userId, startDate, endDate) {
@@ -98,6 +111,7 @@ class MealService {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
+          deletedAt: null,
           capturedAt: { $gte: start, $lt: end }
         }
       },
@@ -167,6 +181,7 @@ class MealService {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
+          deletedAt: null,
           capturedAt: { $gte: startDate, $lt: endDate }
         }
       },

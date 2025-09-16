@@ -8,6 +8,11 @@ function jwtMiddleware(req, res, next) {
   ) {
     return next();
   }
+  
+  // Allow public access to onboarding questions
+  if (req.url === '/onboarding/questions' && req.method === 'GET') {
+    return next();
+  }
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.writeHead(401, { 'Content-Type': 'application/json' });

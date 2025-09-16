@@ -76,7 +76,19 @@ async function deleteUser(req, res) {
     }
 
     try {
-      const { deactivateUserByPhone } = require('../models/user');
+      const { deactivateUserByPhone, findUserByPhone } = require('../models/user');
+      const OnboardingService = require('../services/onboardingService');
+      const MealService = require('../services/mealService');
+      
+      // First find the user to get their ID
+      const user = await findUserByPhone(data.phone);
+      if (!user) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'User not found' }));
+        return;
+      }
+
+      // Deactivate the user
       const result = await deactivateUserByPhone(data.phone);
       
       if (!result) {
@@ -85,11 +97,18 @@ async function deleteUser(req, res) {
         return;
       }
 
+      // Soft delete all user answers
+      await OnboardingService.deleteAllAnswersForUser(user._id);
+      
+      // Soft delete all user meals
+      await MealService.deleteAllMealsForUser(user._id);
+
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ 
-        message: 'User deactivated successfully',
+        message: 'User deactivated successfully and all related data soft deleted',
         phone: data.phone,
-        isActive: false
+        isActive: false,
+        userId: user._id
       }));
     } catch (error) {
       console.error('Error deactivating user:', error);

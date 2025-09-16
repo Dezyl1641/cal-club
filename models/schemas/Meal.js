@@ -78,6 +78,10 @@ const mealSchema = new mongoose.Schema({
   userApproved: {
     type: Boolean,
     default: false
+  },
+  deletedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -85,5 +89,6 @@ const mealSchema = new mongoose.Schema({
 
 // Indexes
 mealSchema.index({ userId: 1, capturedAt: -1 });
+mealSchema.index({ userId: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('Meal', mealSchema, 'meals'); 
