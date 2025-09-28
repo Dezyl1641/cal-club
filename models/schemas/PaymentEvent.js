@@ -26,12 +26,6 @@ const paymentEventSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     required: true
   },
-  external_idempotence_id: {
-    type: String,
-    unique: true,
-    sparse: true,
-    trim: true
-  },
   processed: {
     type: Boolean,
     default: false
@@ -48,7 +42,6 @@ const paymentEventSchema = new mongoose.Schema({
 paymentEventSchema.index({ external_subscription_id: 1 });
 paymentEventSchema.index({ userId: 1 });
 paymentEventSchema.index({ event_type: 1 });
-// external_idempotence_id already has unique index from schema definition
 paymentEventSchema.index({ processed: 1 });
 paymentEventSchema.index({ createdAt: -1 });
 

@@ -49,6 +49,7 @@ async function createSubscription(req, res) {
     res.end(JSON.stringify({
       success: true,
       message: 'Subscription created successfully',
+      external_subscription_id: externalSubscription.external_subscription_id,
       subscription: {
         id: externalSubscription._id,
         external_subscription_id: externalSubscription.external_subscription_id,

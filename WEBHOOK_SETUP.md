@@ -11,7 +11,6 @@ This system handles Razorpay webhook events to automatically update subscription
 - `userId`: ObjectId (ref: User)
 - `event_type`: String (Razorpay event name)
 - `event_data`: Mixed (Full webhook payload)
-- `external_idempotence_id`: String (unique, sparse)
 - `processed`: Boolean (default: false)
 - `processing_error`: String
 - `createdAt`: Date
@@ -75,11 +74,10 @@ RAZORPAY_WEBHOOK_SECRET=your_webhook_secret_here
 - Invalid signatures return 401 Unauthorized
 - Prevents unauthorized webhook calls
 
-### **Idempotency & Duplicate Handling**
-- **Event ID Tracking**: Uses `x-razorpay-event-id` header stored as `external_idempotence_id`
-- **At-Least-Once Delivery**: Razorpay may send the same event multiple times
-- **Duplicate Prevention**: Returns success for already processed events
-- **Status Updates**: Idempotent operations prevent duplicate status changes
+### **Event Processing**
+- **Event Storage**: All webhook events are stored in the database
+- **Status Updates**: Subscription status is updated based on event type
+- **Processing Logs**: Comprehensive logging for debugging and monitoring
 
 ### **Timeout Prevention**
 - **5-Second Rule**: Razorpay expects response within 5 seconds
