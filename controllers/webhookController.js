@@ -5,15 +5,25 @@ const parseBody = require('../utils/parseBody');
 
 // Razorpay webhook signature verification
 function verifyRazorpaySignature(body, signature, secret) {
-  const expectedSignature = crypto
-    .createHmac('sha256', secret)
-    .update(body)
-    .digest('hex');
-  
-  return crypto.timingSafeEqual(
-    Buffer.from(signature, 'hex'),
-    Buffer.from(expectedSignature, 'hex')
-  );
+  if (!body || !signature || !secret) {
+    console.error('Missing required parameters for signature verification');
+    return false;
+  }
+
+  try {
+    const expectedSignature = crypto
+      .createHmac('sha256', secret)
+      .update(body)
+      .digest('hex');
+    
+    return crypto.timingSafeEqual(
+      Buffer.from(signature, 'hex'),
+      Buffer.from(expectedSignature, 'hex')
+    );
+  } catch (error) {
+    console.error('Error in signature verification:', error.message);
+    return false;
+  }
 }
 
 // Map Razorpay event types to subscription status
@@ -30,8 +40,9 @@ const eventStatusMap = {
 };
 
 async function handleRazorpayWebhook(req, res) {
+  let body = null;
   try {
-    const body = await new Promise((resolve, reject) => {
+    body = await new Promise((resolve, reject) => {
       parseBody(req, (err, data) => {
         if (err) reject(err);
         else resolve(data);
@@ -55,6 +66,16 @@ async function handleRazorpayWebhook(req, res) {
     });
 
     // Verify webhook signature
+    if (!body || !signature || !webhookSecret) {
+      console.error('❌ MISSING REQUIRED DATA');
+      console.error('Body:', body ? 'present' : 'missing');
+      console.error('Signature:', signature ? 'present' : 'missing');
+      console.error('Webhook Secret:', webhookSecret ? 'present' : 'missing');
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing required data' }));
+      return;
+    }
+
     if (!verifyRazorpaySignature(JSON.stringify(body), signature, webhookSecret)) {
       console.error('❌ INVALID WEBHOOK SIGNATURE');
       console.error('Expected secret:', webhookSecret);
@@ -174,7 +195,8 @@ async function handleRazorpayWebhook(req, res) {
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
     console.error('Event ID:', req.headers['x-razorpay-event-id']);
-    console.error('Event Type:', body?.event);
+    console.error('Event Type:', body?.event || 'unknown');
+    console.error('Body Present:', body ? 'yes' : 'no');
     console.error('Timestamp:', new Date().toISOString());
     
     // Log the error but don't expose internal details
