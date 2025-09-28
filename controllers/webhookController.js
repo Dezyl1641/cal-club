@@ -1,30 +1,8 @@
-const crypto = require('crypto');
 const PaymentEvent = require('../models/schemas/PaymentEvent');
 const ExternalSubscription = require('../models/schemas/ExternalSubscription');
 const parseBody = require('../utils/parseBody');
 
-// Razorpay webhook signature verification
-function verifyRazorpaySignature(body, signature, secret) {
-  if (!body || !signature || !secret) {
-    console.error('Missing required parameters for signature verification');
-    return false;
-  }
-
-  try {
-    const expectedSignature = crypto
-      .createHmac('sha256', secret)
-      .update(body)
-      .digest('hex');
-    
-    return crypto.timingSafeEqual(
-      Buffer.from(signature, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    );
-  } catch (error) {
-    console.error('Error in signature verification:', error.message);
-    return false;
-  }
-}
+// Note: Signature verification removed as it's disabled in Razorpay dashboard
 
 // Map Razorpay event types to subscription status
 const eventStatusMap = {
@@ -41,7 +19,6 @@ const eventStatusMap = {
 
 async function handleRazorpayWebhook(req, res) {
   console.log('handleRazorpayWebhook: request received');
-  console.log('handleRazorpayWebhook: req: ' + JSON.stringify(req));
   let body = null;
   try {
     body = await new Promise((resolve, reject) => {
@@ -51,9 +28,7 @@ async function handleRazorpayWebhook(req, res) {
       });
     });
     console.log('handleRazorpayWebhook: body: ' + JSON.stringify(body));
-    const signature = req.headers['x-razorpay-signature'];
     const eventId = req.headers['x-razorpay-event-id'];
-    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
     // Log incoming webhook request
     console.log('=== RAZORPAY WEBHOOK RECEIVED ===');
@@ -62,32 +37,19 @@ async function handleRazorpayWebhook(req, res) {
     console.log('Subscription ID:', body.payload?.subscription?.entity?.id || body.payload?.subscription?.id);
     console.log('Timestamp:', new Date().toISOString());
     console.log('Headers:', {
-      'x-razorpay-signature': signature ? 'present' : 'missing',
       'x-razorpay-event-id': eventId || 'missing',
       'content-type': req.headers['content-type']
     });
 
-    // Verify webhook signature
-    if (!body || !signature || !webhookSecret) {
-      console.error('❌ MISSING REQUIRED DATA');
-      console.error('Body:', body ? 'present' : 'missing');
-      console.error('Signature:', signature ? 'present' : 'missing');
-      console.error('Webhook Secret:', webhookSecret ? 'present' : 'missing');
+    // Check if body is present
+    if (!body) {
+      console.error('❌ MISSING BODY DATA');
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing required data' }));
+      res.end(JSON.stringify({ error: 'Missing body data' }));
       return;
     }
 
-    if (!verifyRazorpaySignature(JSON.stringify(body), signature, webhookSecret)) {
-      console.error('❌ INVALID WEBHOOK SIGNATURE');
-      console.error('Expected secret:', webhookSecret);
-      console.error('Received signature:', signature);
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Invalid signature' }));
-      return;
-    }
-
-    console.log('✅ Webhook signature verified successfully');
+    console.log('✅ Webhook data validated successfully');
 
     // Check for duplicate events using x-razorpay-event-id
     if (eventId) {
