@@ -40,6 +40,8 @@ const eventStatusMap = {
 };
 
 async function handleRazorpayWebhook(req, res) {
+  console.log('handleRazorpayWebhook: request received');
+  console.log('handleRazorpayWebhook: req: ' + JSON.stringify(req));
   let body = null;
   try {
     body = await new Promise((resolve, reject) => {
@@ -48,7 +50,7 @@ async function handleRazorpayWebhook(req, res) {
         else resolve(data);
       });
     });
-
+    console.log('handleRazorpayWebhook: body: ' + JSON.stringify(body));
     const signature = req.headers['x-razorpay-signature'];
     const eventId = req.headers['x-razorpay-event-id'];
     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
