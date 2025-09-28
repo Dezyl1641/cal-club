@@ -13,6 +13,11 @@ function jwtMiddleware(req, res, next) {
   if (req.url === '/onboarding/questions' && req.method === 'GET') {
     return next();
   }
+  
+  // Allow unauthenticated access to webhook endpoints
+  if (req.url.startsWith('/webhooks/') && req.method === 'POST') {
+    return next();
+  }
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.writeHead(401, { 'Content-Type': 'application/json' });

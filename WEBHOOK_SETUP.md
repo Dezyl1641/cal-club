@@ -20,11 +20,12 @@ This system handles Razorpay webhook events to automatically update subscription
 
 ### 1. Razorpay Webhook Handler
 - **Endpoint**: `POST /webhooks/razorpay`
-- **Headers**: `X-Razorpay-Signature` (required for verification)
+- **Authentication**: None (public endpoint)
 - **Purpose**: Handles all Razorpay subscription events
 
 ### 2. Get Payment Events
 - **Endpoint**: `GET /webhooks/events`
+- **Authentication**: Required (Bearer token)
 - **Headers**: `Authorization: Bearer <jwt_token>`
 - **Query Parameters**: 
   - `limit` (default: 50)

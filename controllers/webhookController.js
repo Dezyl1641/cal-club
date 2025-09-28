@@ -157,6 +157,16 @@ async function handleRazorpayWebhook(req, res) {
 
 async function getPaymentEvents(req, res) {
   try {
+    // Check if user is authenticated
+    if (!req.user || !req.user.userId) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'Authentication required',
+        message: 'This endpoint requires authentication' 
+      }));
+      return;
+    }
+
     const userId = req.user.userId;
     const { limit = 50, offset = 0 } = req.query;
 
