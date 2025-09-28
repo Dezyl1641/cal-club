@@ -5,6 +5,8 @@ const mealRoutes = require('./mealRoutes');
 const userRoutes = require('./userRoutes');
 const appRoutes = require('./appRoutes');
 const onboardingRoutes = require('./onboardingRoutes');
+const subscriptionRoutes = require('./subscriptionRoutes');
+const webhookRoutes = require('./webhookRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -43,6 +45,16 @@ function setupRoutes(req, res) {
   // Onboarding routes
   if (url.startsWith('/onboarding')) {
     return onboardingRoutes(req, res);
+  }
+
+  // Subscription routes
+  if (url.startsWith('/subscriptions')) {
+    return subscriptionRoutes(req, res);
+  }
+
+  // Webhook routes
+  if (url.startsWith('/webhooks')) {
+    return webhookRoutes(req, res);
   }
 
   // Default 404
