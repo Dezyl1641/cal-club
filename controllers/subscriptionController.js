@@ -1,5 +1,6 @@
 const Subscription = require('../models/schemas/Subscription');
 const Plan = require('../models/schemas/Plan');
+const Membership = require('../models/schemas/Membership');
 const paymentService = require('../services/paymentService');
 const parseBody = require('../utils/parseBody');
 
@@ -152,6 +153,29 @@ async function cancelMembership(req, res) {
       return;
     }
 
+    // Also cancel the associated subscription in Razorpay and database
+    const subscription = await Subscription.findOne({
+      _id: membership.subscriptionId,
+      userId: userId
+    });
+
+    if (subscription && subscription.external_subscription_id) {
+      try {
+        // Cancel subscription in Razorpay
+        await paymentService.cancelSubscription(subscription.external_subscription_id);
+        console.log('✅ Razorpay subscription cancelled:', subscription.external_subscription_id);
+      } catch (error) {
+        console.error('❌ Error cancelling Razorpay subscription:', error);
+        // Continue with database update even if Razorpay cancellation fails
+      }
+    }
+
+    // Update subscription status in database
+    await Subscription.findOneAndUpdate(
+      { _id: membership.subscriptionId, userId: userId },
+      { status: 'cancelled' }
+    );
+
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       success: true,
@@ -175,9 +199,55 @@ async function cancelMembership(req, res) {
   }
 }
 
+async function getSubscriptionById(req, res) {
+  try {
+    const subscriptionId = req.url.split('/')[2]; // Extract ID from URL
+    const userId = req.user.userId;
+
+    if (!subscriptionId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Subscription ID is required' }));
+      return;
+    }
+
+    const subscription = await Subscription.findOne({
+      _id: subscriptionId,
+      userId: userId
+    });
+
+    if (!subscription) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Subscription not found or access denied' }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      subscription: {
+        id: subscription._id,
+        external_subscription_id: subscription.external_subscription_id,
+        external_plan_id: subscription.external_plan_id,
+        status: subscription.status,
+        createdAt: subscription.createdAt,
+        updatedAt: subscription.updatedAt
+      }
+    }));
+
+  } catch (error) {
+    console.error('Error fetching subscription:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      error: 'Failed to fetch subscription',
+      details: error.message 
+    }));
+  }
+}
+
 module.exports = {
   createSubscription,
   getSubscription,
+  getSubscriptionById,
   getActivePlans,
   cancelMembership
 };

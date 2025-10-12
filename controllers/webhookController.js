@@ -52,6 +52,7 @@ async function createMembership(subscription, plan) {
 // Map Razorpay event types to subscription status
 const eventStatusMap = {
   'subscription.created': 'created',
+  'subscription.authenticated': 'active',
   'subscription.activated': 'active',
   'subscription.charged': 'active',
   'subscription.paused': 'paused',

@@ -11,10 +11,18 @@ function subscriptionRoutes(req, res) {
   // Extract base path without query parameters
   const basePath = req.url.split('?')[0];
   const routeKey = `${req.method} ${basePath}`;
+  
+  // Check for exact matches first
   const handler = routes[routeKey];
-
   if (handler) {
     handler(req, res);
+    return true;
+  }
+
+  // Check for dynamic routes (like /subscriptions/:id)
+  if (req.method === 'GET' && basePath.startsWith('/subscriptions/')) {
+    const subscriptionController = require('../controllers/subscriptionController');
+    subscriptionController.getSubscriptionById(req, res);
     return true;
   }
 
