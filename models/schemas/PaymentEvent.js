@@ -26,6 +26,12 @@ const paymentEventSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     required: true
   },
+  idempotence_id: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true
+  },
   processed: {
     type: Boolean,
     default: false
@@ -42,6 +48,7 @@ const paymentEventSchema = new mongoose.Schema({
 paymentEventSchema.index({ external_subscription_id: 1 });
 paymentEventSchema.index({ userId: 1 });
 paymentEventSchema.index({ event_type: 1 });
+paymentEventSchema.index({ idempotence_id: 1 }); // Unique index for idempotency
 paymentEventSchema.index({ processed: 1 });
 paymentEventSchema.index({ createdAt: -1 });
 

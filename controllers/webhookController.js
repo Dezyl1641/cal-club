@@ -97,7 +97,18 @@ async function handleRazorpayWebhook(req, res) {
 
     console.log('✅ Webhook data validated successfully');
 
-    // Note: Duplicate event checking removed - events will be processed each time
+    // Check for duplicate events using idempotence_id
+    const existingEvent = await PaymentEvent.findOne({ idempotence_id: eventId });
+    if (existingEvent) {
+      console.log('⚠️ DUPLICATE EVENT DETECTED - Already processed:', eventId);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: true, 
+        message: 'Event already processed',
+        eventId: eventId 
+      }));
+      return;
+    }
 
     const { event, payload } = body;
     const subscriptionId = payload.subscription?.entity?.id || payload.subscription?.id;
@@ -137,6 +148,7 @@ async function handleRazorpayWebhook(req, res) {
       userId: subscription.userId,
       event_type: event,
       event_data: payload,
+      idempotence_id: eventId,
       processed: false
     });
 
