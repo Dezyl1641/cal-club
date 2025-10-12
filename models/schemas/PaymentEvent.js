@@ -48,7 +48,7 @@ const paymentEventSchema = new mongoose.Schema({
 paymentEventSchema.index({ external_subscription_id: 1 });
 paymentEventSchema.index({ userId: 1 });
 paymentEventSchema.index({ event_type: 1 });
-paymentEventSchema.index({ idempotence_id: 1 }); // Unique index for idempotency
+// idempotence_id already has unique index from schema definition
 paymentEventSchema.index({ processed: 1 });
 paymentEventSchema.index({ createdAt: -1 });
 
