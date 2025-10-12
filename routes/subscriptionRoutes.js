@@ -2,7 +2,9 @@ const subscriptionController = require('../controllers/subscriptionController');
 
 const routes = {
   'POST /subscriptions': subscriptionController.createSubscription,
-  'GET /subscriptions': subscriptionController.getSubscription
+  'GET /subscriptions': subscriptionController.getSubscription,
+  'GET /plans': subscriptionController.getActivePlans,
+  'POST /memberships/cancel': subscriptionController.cancelMembership
 };
 
 function subscriptionRoutes(req, res) {

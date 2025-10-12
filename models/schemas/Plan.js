@@ -34,13 +34,18 @@ const planSchema = new mongoose.Schema({
     required: true,
     unique: true,
     trim: true
+  },
+  isActive: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true
 });
 
 // Indexes
-planSchema.index({ external_plan_id: 1 });
+// external_plan_id already has unique index from schema definition
+planSchema.index({ isActive: 1 });
 planSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Plan', planSchema, 'plans');

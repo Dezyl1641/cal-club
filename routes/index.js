@@ -52,6 +52,16 @@ function setupRoutes(req, res) {
     return subscriptionRoutes(req, res);
   }
 
+  // Plans routes
+  if (url.startsWith('/plans')) {
+    return subscriptionRoutes(req, res);
+  }
+
+  // Memberships routes
+  if (url.startsWith('/memberships')) {
+    return subscriptionRoutes(req, res);
+  }
+
   // Webhook routes
   if (url.startsWith('/webhooks')) {
     return webhookRoutes(req, res);

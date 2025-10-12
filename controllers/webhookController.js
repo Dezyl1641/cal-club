@@ -1,8 +1,53 @@
 const PaymentEvent = require('../models/schemas/PaymentEvent');
-const ExternalSubscription = require('../models/schemas/ExternalSubscription');
+const Subscription = require('../models/schemas/Subscription');
+const Membership = require('../models/schemas/Membership');
+const Plan = require('../models/schemas/Plan');
 const parseBody = require('../utils/parseBody');
 
 // Note: Signature verification removed as it's disabled in Razorpay dashboard
+
+// Helper function to create membership
+async function createMembership(subscription, plan) {
+  try {
+    const startDate = new Date();
+    const endDate = new Date(startDate);
+    
+    // Add duration based on plan
+    if (plan.durationUnit === 'days') {
+      endDate.setDate(endDate.getDate() + plan.duration);
+    } else if (plan.durationUnit === 'months') {
+      endDate.setMonth(endDate.getMonth() + plan.duration);
+    } else if (plan.durationUnit === 'years') {
+      endDate.setFullYear(endDate.getFullYear() + plan.duration);
+    }
+    
+    // Round to end of day
+    endDate.setHours(23, 59, 59, 999);
+    
+    const membership = new Membership({
+      userId: subscription.userId,
+      subscriptionId: subscription._id,
+      planId: plan._id,
+      start: startDate,
+      end: endDate,
+      status: 'purchased'
+    });
+    
+    await membership.save();
+    
+    console.log('✅ MEMBERSHIP CREATED');
+    console.log('User ID:', subscription.userId);
+    console.log('Plan:', plan.title);
+    console.log('Start:', startDate);
+    console.log('End:', endDate);
+    console.log('Duration:', plan.duration, plan.durationUnit);
+    
+    return membership;
+  } catch (error) {
+    console.error('❌ ERROR CREATING MEMBERSHIP:', error);
+    throw error;
+  }
+}
 
 // Map Razorpay event types to subscription status
 const eventStatusMap = {
@@ -66,13 +111,13 @@ async function handleRazorpayWebhook(req, res) {
 
     console.log('🔍 Looking up subscription:', subscriptionId);
 
-    // Find the external subscription
-    const externalSubscription = await ExternalSubscription.findOne({
+    // Find the subscription
+    const subscription = await Subscription.findOne({
       external_subscription_id: subscriptionId
     });
 
-    if (!externalSubscription) {
-      console.error('❌ EXTERNAL SUBSCRIPTION NOT FOUND');
+    if (!subscription) {
+      console.error('❌ SUBSCRIPTION NOT FOUND');
       console.error('Subscription ID:', subscriptionId);
       console.error('Event Type:', event);
       res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -80,15 +125,15 @@ async function handleRazorpayWebhook(req, res) {
       return;
     }
 
-    console.log('✅ Found external subscription');
-    console.log('User ID:', externalSubscription.userId);
-    console.log('Current Status:', externalSubscription.status);
+    console.log('✅ Found subscription');
+    console.log('User ID:', subscription.userId);
+    console.log('Current Status:', subscription.status);
 
     // Create payment event record
     const paymentEvent = new PaymentEvent({
       merchant: 'RAZORPAY',
       external_subscription_id: subscriptionId,
-      userId: externalSubscription.userId,
+      userId: subscription.userId,
       event_type: event,
       event_data: payload,
       processed: false
@@ -98,10 +143,10 @@ async function handleRazorpayWebhook(req, res) {
 
     // Update subscription status if applicable (idempotent operation)
     const newStatus = eventStatusMap[event];
-    if (newStatus && newStatus !== externalSubscription.status) {
-      const oldStatus = externalSubscription.status;
-      externalSubscription.status = newStatus;
-      await externalSubscription.save();
+    if (newStatus && newStatus !== subscription.status) {
+      const oldStatus = subscription.status;
+      subscription.status = newStatus;
+      await subscription.save();
       
       console.log('🔄 STATUS UPDATE');
       console.log('Subscription ID:', subscriptionId);
@@ -110,8 +155,26 @@ async function handleRazorpayWebhook(req, res) {
       console.log('Event Type:', event);
     } else {
       console.log('ℹ️  No status change needed');
-      console.log('Current Status:', externalSubscription.status);
+      console.log('Current Status:', subscription.status);
       console.log('Event Status:', newStatus);
+    }
+
+    // Create membership for subscription.authenticated event
+    if (event === 'subscription.authenticated') {
+      try {
+        // Find the plan using external_plan_id
+        const plan = await Plan.findOne({ external_plan_id: subscription.external_plan_id });
+        
+        if (!plan) {
+          console.error('❌ PLAN NOT FOUND');
+          console.error('External Plan ID:', subscription.external_plan_id);
+        } else {
+          await createMembership(subscription, plan);
+        }
+      } catch (error) {
+        console.error('❌ ERROR CREATING MEMBERSHIP:', error);
+        // Don't fail the webhook for membership creation errors
+      }
     }
 
     // Mark event as processed

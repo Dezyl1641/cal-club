@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const externalSubscriptionSchema = new mongoose.Schema({
+const subscriptionSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -29,9 +29,9 @@ const externalSubscriptionSchema = new mongoose.Schema({
 
 // Indexes
 // external_subscription_id already has unique index from schema definition
-externalSubscriptionSchema.index({ userId: 1 });
-externalSubscriptionSchema.index({ external_plan_id: 1 });
-externalSubscriptionSchema.index({ status: 1 });
-externalSubscriptionSchema.index({ createdAt: -1 });
+subscriptionSchema.index({ userId: 1 });
+subscriptionSchema.index({ external_plan_id: 1 });
+subscriptionSchema.index({ status: 1 });
+subscriptionSchema.index({ createdAt: -1 });
 
-module.exports = mongoose.model('ExternalSubscription', externalSubscriptionSchema, 'external_subscriptions');
+module.exports = mongoose.model('Subscription', subscriptionSchema, 'subscriptions');
