@@ -7,6 +7,7 @@ const appRoutes = require('./appRoutes');
 const onboardingRoutes = require('./onboardingRoutes');
 const subscriptionRoutes = require('./subscriptionRoutes');
 const webhookRoutes = require('./webhookRoutes');
+const goalRoutes = require('./goalRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -62,15 +63,20 @@ function setupRoutes(req, res) {
     return subscriptionRoutes(req, res);
   }
 
-  // Webhook routes
-  if (url.startsWith('/webhooks')) {
-    return webhookRoutes(req, res);
-  }
+      // Webhook routes
+      if (url.startsWith('/webhooks')) {
+        return webhookRoutes(req, res);
+      }
 
-  // Default 404
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Route not found' }));
-  return true;
+      // Goal calculation routes
+      if (url.startsWith('/goals')) {
+        return goalRoutes(req, res);
+      }
+
+      // Default 404
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Route not found' }));
+      return true;
 }
 
 module.exports = setupRoutes; 

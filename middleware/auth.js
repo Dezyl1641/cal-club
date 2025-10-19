@@ -14,10 +14,15 @@ function jwtMiddleware(req, res, next) {
     return next();
   }
   
-  // Allow unauthenticated access to webhook endpoints
-  if (req.url.startsWith('/webhooks/') && req.method === 'POST') {
-    return next();
-  }
+      // Allow unauthenticated access to webhook endpoints
+      if (req.url.startsWith('/webhooks/') && req.method === 'POST') {
+        return next();
+      }
+
+      // Allow unauthenticated access to goal calculation endpoints
+      if (req.url.startsWith('/goals/')) {
+        return next();
+      }
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
