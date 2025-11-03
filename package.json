@@ -20,7 +20,8 @@
     "mongoose": "^8.16.5",
     "openai": "^5.10.1",
     "plivo": "^4.75.1",
-    "razorpay": "^2.9.2"
+    "razorpay": "^2.9.2",
+    "twilio": "^5.10.4"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
