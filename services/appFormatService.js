@@ -122,7 +122,7 @@ class AppFormatService {
     const caloriesBurnt = Math.max(0, calorieGoal - todayData.totalCalories);
     
     return {
-      title: "TrackAI",
+      title: "CalClub",
       icon: "fire",
       caloriesBurnt: parseFloat(caloriesBurnt.toFixed(2))
     };
@@ -242,18 +242,18 @@ class AppFormatService {
         title: "Home",
         action: "navigate_home"
       },
-      // {
-      //   active: false,
-      //   icon: "progress",
-      //   title: "Progress",
-      //   action: "navigate_progress"
-      // },
-      // {
-      //   active: false,
-      //   icon: "settings",
-      //   title: "Settings",
-      //   action: "navigate_settings"
-      // }
+      {
+        "active": true,
+        "icon": "progress",
+        "title": "Progress",
+        "action": "navigate_progress"
+      },
+      {
+          "active": true,
+          "icon": "settings",
+          "title": "Settings",
+          "action": "navigate_settings"
+      }
     ];
   }
 

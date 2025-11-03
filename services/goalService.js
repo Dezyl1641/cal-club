@@ -388,7 +388,7 @@ class GoalService {
   computeTargetsV2(inputs) {
     try {
       // Validate required inputs
-      const required = ['sex_at_birth', 'age_years', 'height_cm', 'weight_kg', 'goal_type', 'pace_kg_per_week'];
+      const required = ['sex_at_birth', 'age_years', 'height_cm', 'weight_kg', 'goal_type', 'pace_kg_per_week', 'activity_level'];
       for (const field of required) {
         if (inputs[field] === undefined || inputs[field] === null) {
           throw new Error(`Missing required field: ${field}`);
