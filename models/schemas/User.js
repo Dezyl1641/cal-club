@@ -29,6 +29,11 @@ const userSchema = new mongoose.Schema({
     }
   },
   goals: {
+    goal: {
+      type: String,
+      trim: true,
+      maxlength: 200
+    },
     dailyCalories: {
       type: Number,
       min: 0,

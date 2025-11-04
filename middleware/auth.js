@@ -19,8 +19,9 @@ function jwtMiddleware(req, res, next) {
         return next();
       }
 
-      // Allow unauthenticated access to goal calculation endpoints
-      if (req.url.startsWith('/goals/')) {
+      // Allow unauthenticated access to goal calculation endpoints (read-only)
+      // But require auth for calculate-and-save since it modifies user data
+      if (req.url.startsWith('/goals/') && !req.url.includes('/calculate-and-save')) {
         return next();
       }
   const authHeader = req.headers['authorization'];

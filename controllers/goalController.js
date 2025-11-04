@@ -117,7 +117,131 @@ async function calculateGoalsV2(req, res) {
   }
 }
 
+/**
+ * Calculate goals using v2 and save to user profile
+ * POST /goals/calculate-and-save
+ */
+async function calculateAndSaveGoals(req, res) {
+  try {
+    // Extract userId from auth token (set by jwtMiddleware)
+    if (!req.user || !req.user.userId) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: 'Authentication required. Please provide a valid JWT token.'
+      }));
+      return;
+    }
+
+    const userId = req.user.userId;
+
+    const body = await new Promise((resolve, reject) => {
+      parseBody(req, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    console.log('Calculate and save goals request:', JSON.stringify(body, null, 2));
+
+    // Validate inputs first
+    const validation = goalService.validateInputs(body);
+    if (!validation.valid) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: 'Invalid input parameters',
+        validation: {
+          valid: false,
+          errors: validation.errors,
+          warnings: validation.warnings
+        }
+      }));
+      return;
+    }
+
+    // Calculate goals using v2 logic
+    const result = goalService.computeTargetsV2(body);
+
+    // Generate goal description
+    const goalType = body.goal_type || 'maintain';
+    const currentWeight = body.weight_kg;
+    const targetWeight = body.desired_weight_kg || currentWeight;
+    const pace = Math.abs(body.pace_kg_per_week);
+    
+    let goalDescription = '';
+    if (goalType === 'lose') {
+      const weeksToGoal = Math.ceil(Math.abs(targetWeight - currentWeight) / pace);
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + (weeksToGoal * 7));
+      goalDescription = `Lose ${Math.abs(currentWeight - targetWeight).toFixed(1)} kg by ${targetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`;
+    } else if (goalType === 'gain') {
+      const weeksToGoal = Math.ceil(Math.abs(targetWeight - currentWeight) / pace);
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() + (weeksToGoal * 7));
+      goalDescription = `Gain ${Math.abs(targetWeight - currentWeight).toFixed(1)} kg by ${targetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`;
+    } else {
+      goalDescription = `Maintain weight at ${currentWeight} kg`;
+    }
+
+    // Save to user profile
+    const { updateUser } = require('../models/user');
+    const updatedUser = await updateUser(userId, {
+      'goals.goal': goalDescription,
+      'goals.dailyCalories': result.calorie_target,
+      'goals.dailyProtein': result.macros.protein_g,
+      'goals.dailyCarbs': result.macros.carb_g,
+      'goals.dailyFats': result.macros.fat_g
+    });
+
+    if (!updatedUser) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: false,
+        error: 'User not found'
+      }));
+      return;
+    }
+
+    // Prepare response with planData
+    const response = {
+      success: true,
+      data: {
+        ...result,
+        planData: {
+          goal: goalDescription,
+          calories: result.calorie_target,
+          protein: result.macros.protein_g,
+          fat: result.macros.fat_g,
+          carbs: result.macros.carb_g
+        }
+      },
+      message: 'Goals calculated and saved successfully'
+    };
+
+    // Add validation warnings if any
+    if (validation.warnings.length > 0) {
+      response.data.warnings = [...(result.warnings || []), ...validation.warnings];
+    }
+
+    console.log('Goals saved to user profile:', updatedUser.goals);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(response));
+
+  } catch (error) {
+    console.error('Error calculating and saving goals:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: false,
+      error: 'Failed to calculate and save goals',
+      details: error.message
+    }));
+  }
+}
+
 module.exports = {
   calculateGoals,
-  calculateGoalsV2
+  calculateGoalsV2,
+  calculateAndSaveGoals
 };

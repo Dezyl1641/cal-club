@@ -243,13 +243,13 @@ class AppFormatService {
         action: "navigate_home"
       },
       {
-        "active": true,
+        "active": false,
         "icon": "progress",
         "title": "Progress",
         "action": "navigate_progress"
       },
       {
-          "active": true,
+          "active": false,
           "icon": "settings",
           "title": "Settings",
           "action": "navigate_settings"

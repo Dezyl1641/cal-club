@@ -35,25 +35,6 @@ const imageSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-const planDataSchema = new mongoose.Schema({
-  goal: {
-    type: String,
-    trim: true
-  },
-  calories: {
-    type: Number
-  },
-  protein: {
-    type: Number
-  },
-  fat: {
-    type: Number
-  },
-  carbs: {
-    type: Number
-  }
-}, { _id: false });
-
 const questionSchema = new mongoose.Schema({
   text: {
     type: String,
@@ -81,6 +62,7 @@ const questionSchema = new mongoose.Schema({
       'PLAN_SUMMARY',
       'MEAL_TIMING',
       'NOTIFICATION_PERMISSION',
+      'GOAL_CALCULATION',
       // Legacy types for backward compatibility
       'text',
       'number',
@@ -97,7 +79,6 @@ const questionSchema = new mongoose.Schema({
   },
   options: [optionSchema],
   image: imageSchema,
-  planData: planDataSchema,
   sequence: {
     type: Number,
     required: true,
