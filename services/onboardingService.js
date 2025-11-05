@@ -1,7 +1,155 @@
 const Question = require('../models/schemas/Question');
 const UserQuestion = require('../models/schemas/UserQuestion');
+const UserLog = require('../models/schemas/UserLog');
+const mongoose = require('mongoose');
 
 class OnboardingService {
+  /**
+   * Extract weight from answer string
+   * Supports formats: "weight_60.5" or "height_171&weight_60.5"
+   * @param {string} answerString - The answer string
+   * @returns {number|null} - Weight in kg or null if not found
+   */
+  static extractWeightFromAnswer(answerString) {
+    if (!answerString || typeof answerString !== 'string') {
+      return null;
+    }
+
+    // Parse format: "weight_60.5" or "height_171&weight_60.5"
+    const weightMatch = answerString.match(/weight_([\d.]+)/i);
+    if (weightMatch && weightMatch[1]) {
+      const weight = parseFloat(weightMatch[1]);
+      return isNaN(weight) ? null : weight;
+    }
+
+    return null;
+  }
+
+  /**
+   * Update user's target weight in goals
+   * @param {string} userId - User ID
+   * @param {number} weight - Weight value in kg
+   */
+  static async updateUserTargetWeight(userId, weight) {
+    try {
+      const User = require('../models/schemas/User');
+      
+      // Convert userId to ObjectId if it's a string
+      const userIdObjectId = typeof userId === 'string' 
+        ? new mongoose.Types.ObjectId(userId) 
+        : userId;
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userIdObjectId,
+        { 'goals.targetWeight': weight },
+        { new: true }
+      );
+
+      if (updatedUser) {
+        console.log(`✅ Updated target weight for user ${userId}: ${weight} kg`);
+      } else {
+        console.warn(`⚠️ User not found: ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error updating user target weight:', error);
+      // Don't throw error - this is a background operation
+    }
+  }
+
+  /**
+   * Update user's target goal in goals
+   * @param {string} userId - User ID
+   * @param {string} targetGoal - Target goal value
+   */
+  static async updateUserTargetGoal(userId, targetGoal) {
+    try {
+      const User = require('../models/schemas/User');
+      
+      // Convert userId to ObjectId if it's a string
+      const userIdObjectId = typeof userId === 'string' 
+        ? new mongoose.Types.ObjectId(userId) 
+        : userId;
+
+      // Trim and validate the target goal
+      const trimmedGoal = typeof targetGoal === 'string' ? targetGoal.trim() : String(targetGoal);
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userIdObjectId,
+        { 'goals.targetGoal': trimmedGoal },
+        { new: true }
+      );
+
+      if (updatedUser) {
+        console.log(`✅ Updated target goal for user ${userId}: ${trimmedGoal}`);
+      } else {
+        console.warn(`⚠️ User not found: ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error updating user target goal:', error);
+      // Don't throw error - this is a background operation
+    }
+  }
+
+  /**
+   * Auto-log weight to user_logs when height/weight question is answered
+   * @param {string} userId - User ID
+   * @param {string} answerString - Answer string in format "height_171&weight_60.5"
+   */
+  static async autoLogWeight(userId, answerString) {
+    try {
+      const weight = this.extractWeightFromAnswer(answerString);
+      
+      if (!weight || weight <= 0) {
+        console.log('No valid weight found in answer string:', answerString);
+        return;
+      }
+
+      // Get current date in IST timezone
+      const now = new Date();
+      const istFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const dateString = istFormatter.format(now);
+
+      // Convert userId to ObjectId if it's a string
+      const userIdObjectId = typeof userId === 'string' 
+        ? new mongoose.Types.ObjectId(userId) 
+        : userId;
+
+      // Check if log already exists for today
+      const existingLog = await UserLog.findOne({
+        userId: userIdObjectId,
+        type: 'WEIGHT',
+        date: dateString
+      });
+
+      if (existingLog) {
+        // Update existing log
+        existingLog.value = weight.toString();
+        existingLog.unit = 'kg';
+        await existingLog.save();
+        console.log(`✅ Updated weight log for user ${userId}: ${weight} kg on ${dateString}`);
+      } else {
+        // Create new log
+        const userLog = new UserLog({
+          userId: userIdObjectId,
+          type: 'WEIGHT',
+          value: weight.toString(),
+          unit: 'kg',
+          date: dateString
+        });
+        await userLog.save();
+        console.log(`✅ Created weight log for user ${userId}: ${weight} kg on ${dateString}`);
+      }
+    } catch (error) {
+      console.error('Error auto-logging weight:', error);
+      // Don't throw error - this is a background operation
+    }
+  }
+
   static async getActiveQuestions() {
     try {
       return await Question.find({ isActive: true })
@@ -50,6 +198,70 @@ class OnboardingService {
       
       const savedAnswers = await UserQuestion.insertMany(newAnswers);
       const results = savedAnswers.map(answer => ({ action: 'created', answer }));
+
+      // Auto-log weight if weight logging question is answered (questionId: 6908fe66896ccf24778c9079)
+      const WEIGHT_LOG_QUESTION_ID = '6908fe66896ccf24778c9079';
+      const weightLogAnswer = answers.find(answer => {
+        const questionIdStr = answer.questionId?.toString();
+        return questionIdStr === WEIGHT_LOG_QUESTION_ID;
+      });
+
+      if (weightLogAnswer && weightLogAnswer.values && weightLogAnswer.values.length > 0) {
+        // Extract answer string from values array (usually first element)
+        const answerString = weightLogAnswer.values[0];
+        if (answerString && typeof answerString === 'string') {
+          // Auto-log weight in background (don't await to avoid blocking response)
+          this.autoLogWeight(weightLogAnswer.userId, answerString).catch(err => {
+            console.error('Background weight logging failed:', err);
+          });
+        }
+      }
+
+      // Update target weight if height/weight question is answered (questionId: 6908fe66896ccf24778c907f)
+      const TARGET_WEIGHT_QUESTION_ID = '6908fe66896ccf24778c907f';
+      const targetWeightAnswer = answers.find(answer => {
+        const questionIdStr = answer.questionId?.toString();
+        return questionIdStr === TARGET_WEIGHT_QUESTION_ID;
+      });
+
+      if (targetWeightAnswer && targetWeightAnswer.values && targetWeightAnswer.values.length > 0) {
+        // Extract answer string from values array (usually first element)
+        const answerString = targetWeightAnswer.values[0];
+        if (answerString && typeof answerString === 'string') {
+          // Extract weight from answer string
+          const weight = this.extractWeightFromAnswer(answerString);
+          
+          if (weight && weight > 0) {
+            // Update user's target weight in goals
+            this.updateUserTargetWeight(targetWeightAnswer.userId, weight).catch(err => {
+              console.error('Background target weight update failed:', err);
+            });
+          }
+        }
+      }
+
+      // Update target goal if goal question is answered
+      const TARGET_GOAL_QUESTION_ID = '6908fe66896ccf24778c907d';
+      const targetGoalAnswer = answers.find(answer => {
+        const questionIdStr = answer.questionId?.toString();
+        return questionIdStr === TARGET_GOAL_QUESTION_ID;
+      });
+
+      if (targetGoalAnswer && targetGoalAnswer.values && targetGoalAnswer.values.length > 0) {
+        // Extract answer value from values array (usually first element)
+        const goalValue = targetGoalAnswer.values[0];
+        if (goalValue !== null && goalValue !== undefined) {
+          // Convert to string if needed and update target goal
+          const goalString = typeof goalValue === 'string' ? goalValue : String(goalValue);
+          
+          if (goalString.trim()) {
+            // Update user's target goal in background (don't await to avoid blocking response)
+            this.updateUserTargetGoal(targetGoalAnswer.userId, goalString).catch(err => {
+              console.error('Background target goal update failed:', err);
+            });
+          }
+        }
+      }
 
       return {
         success: true,

@@ -34,6 +34,16 @@ const userSchema = new mongoose.Schema({
       trim: true,
       maxlength: 200
     },
+    targetGoal: {
+      type: String,
+      trim: true,
+      maxlength: 200
+    },
+    targetWeight: {
+      type: Number,
+      min: 0,
+      max: 500
+    },
     dailyCalories: {
       type: Number,
       min: 0,

@@ -28,4 +28,38 @@ async function getAppCalendar(req, res) {
   }
 }
 
-module.exports = { getAppCalendar }; 
+async function getProgress(req, res) {
+  try {
+    // Validate authentication
+    if (!req.user || !req.user.userId) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: false,
+        error: 'Authentication required. Please provide a valid JWT token.' 
+      }));
+      return;
+    }
+
+    const progressData = await AppFormatService.getProgressData(req.user.userId);
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Progress data fetched successfully',
+      data: progressData
+    }));
+  } catch (error) {
+    console.error('Error fetching progress data:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      success: false,
+      error: 'Failed to fetch progress data', 
+      details: error.message 
+    }));
+  }
+}
+
+module.exports = { 
+  getAppCalendar,
+  getProgress
+}; 

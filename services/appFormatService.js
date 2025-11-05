@@ -248,12 +248,12 @@ class AppFormatService {
         "title": "Progress",
         "action": "navigate_progress"
       },
-      {
-          "active": false,
-          "icon": "settings",
-          "title": "Settings",
-          "action": "navigate_settings"
-      }
+      // {
+      //     "active": false,
+      //     "icon": "settings",
+      //     "title": "Settings",
+      //     "action": "navigate_settings"
+      // }
     ];
   }
 
@@ -304,6 +304,218 @@ class AppFormatService {
 
   static isSameDay(date1, date2) {
     return date1.toDateString() === date2.toDateString();
+  }
+
+  /**
+   * Get progress data for user
+   * @param {string} userId - User ID
+   * @returns {Object} Progress data
+   */
+  static async getProgressData(userId) {
+    try {
+      const User = require('../models/schemas/User');
+      const UserLog = require('../models/schemas/UserLog');
+      const mongoose = require('mongoose');
+
+      // Convert userId to ObjectId if needed
+      const userIdObjectId = typeof userId === 'string' 
+        ? new mongoose.Types.ObjectId(userId) 
+        : userId;
+
+      // Get user data
+      const user = await User.findById(userIdObjectId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Get weight logs for this user (sorted by date ascending - oldest first)
+      const weightLogs = await UserLog.find({
+        userId: userIdObjectId,
+        type: 'WEIGHT'
+      }).sort({ date: 1 }); // Sort ascending: date: 1 means oldest dates first
+
+      // Extract header from goals
+      const header = user.goals?.targetGoal || user.goals?.goal || 'Track your progress';
+
+      // Get start and current weight
+      let startWeight = null;
+      let currentWeight = null;
+      let lastCheckedIn = null;
+
+      if (weightLogs.length > 0) {
+        // Start weight = oldest entry (first in sorted array)
+        // Since date is sorted ascending (1), weightLogs[0] = oldest date
+        const oldestLog = weightLogs[0];
+        if (oldestLog && oldestLog.value) {
+          startWeight = parseFloat(oldestLog.value);
+        }
+
+        // Current weight = latest entry (last in sorted array)
+        // Since date is sorted ascending (1), weightLogs[length-1] = latest date
+        const latestLog = weightLogs[weightLogs.length - 1];
+        if (latestLog && latestLog.value) {
+          currentWeight = parseFloat(latestLog.value);
+        }
+        
+        // Last checked in = date of latest weight log
+        if (latestLog && latestLog.date && /^\d{4}-\d{2}-\d{2}$/.test(latestLog.date)) {
+          lastCheckedIn = latestLog.date; // Already in YYYY-MM-DD format
+        }
+      }
+
+      // Get target weight from user goals
+      const targetWeight = user.goals?.targetWeight || null;
+
+      // Calculate weight change per week
+      let weightChangePerWeek = 0;
+      if (startWeight && currentWeight && weightLogs.length > 1) {
+        try {
+          // Parse dates with validation
+          const startDateStr = weightLogs[0].date;
+          const endDateStr = weightLogs[weightLogs.length - 1].date;
+          
+          if (startDateStr && endDateStr && /^\d{4}-\d{2}-\d{2}$/.test(startDateStr) && /^\d{4}-\d{2}-\d{2}$/.test(endDateStr)) {
+            const startDate = new Date(startDateStr + 'T00:00:00');
+            const endDate = new Date(endDateStr + 'T00:00:00');
+            
+            // Validate dates are valid
+            if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+              // Calculate weeks between
+              const daysDiff = (endDate - startDate) / (1000 * 60 * 60 * 24);
+              const weeksDiff = daysDiff / 7;
+              
+              if (weeksDiff > 0) {
+                weightChangePerWeek = (currentWeight - startWeight) / weeksDiff;
+              }
+            }
+          }
+        } catch (error) {
+          console.warn('Error calculating weight change per week:', error);
+          weightChangePerWeek = 0;
+        }
+      }
+
+      // Get daily goals from user
+      const dailyGoal = {
+        calorie: user.goals?.dailyCalories || 2000,
+        protein: user.goals?.dailyProtein || 150,
+        carbs: user.goals?.dailyCarbs || 250,
+        fats: user.goals?.dailyFats || 65
+      };
+
+      // Format lastCheckedIn date
+      let formattedLastCheckedIn = null;
+      if (lastCheckedIn && /^\d{4}-\d{2}-\d{2}$/.test(lastCheckedIn)) {
+        try {
+          const date = new Date(lastCheckedIn + 'T00:00:00');
+          if (!isNaN(date.getTime())) {
+            formattedLastCheckedIn = date.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+          }
+        } catch (error) {
+          console.warn('Error formatting lastCheckedIn date:', error);
+        }
+      }
+
+      // Calculate nextCheckIn: max(today IST, lastCheckedIn + 7 days)
+      let nextCheckIn = null;
+      try {
+        const now = new Date();
+        const istFormatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const todayIST = istFormatter.format(now);
+
+        if (lastCheckedIn && /^\d{4}-\d{2}-\d{2}$/.test(lastCheckedIn)) {
+          // Add 7 days to lastCheckedIn
+          const lastCheckInDate = new Date(lastCheckedIn + 'T00:00:00');
+          if (!isNaN(lastCheckInDate.getTime())) {
+            lastCheckInDate.setDate(lastCheckInDate.getDate() + 7);
+            const nextCheckInDateStr = istFormatter.format(lastCheckInDate);
+
+            // Compare dates (YYYY-MM-DD format allows string comparison)
+            const nextCheckInDate = nextCheckInDateStr > todayIST ? nextCheckInDateStr : todayIST;
+            const date = new Date(nextCheckInDate + 'T00:00:00');
+            if (!isNaN(date.getTime())) {
+              nextCheckIn = date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              });
+            }
+          }
+        }
+        
+        // If no lastCheckedIn or error, use today
+        if (!nextCheckIn) {
+          const date = new Date(todayIST + 'T00:00:00');
+          if (!isNaN(date.getTime())) {
+            nextCheckIn = date.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('Error calculating nextCheckIn:', error);
+        // Fallback to today's date
+        try {
+          const now = new Date();
+          nextCheckIn = now.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          });
+        } catch (fallbackError) {
+          nextCheckIn = null;
+        }
+      }
+
+      // Footer data (static navigation)
+      const footerData = [
+        {
+          active: false,
+          icon: 'home',
+          title: 'Home',
+          action: 'navigate_home'
+        },
+        {
+          active: true,
+          icon: 'progress',
+          title: 'Progress',
+          action: 'navigate_progress'
+        },
+        // {
+        //   active: false,
+        //   icon: 'settings',
+        //   title: 'Settings',
+        //   action: 'navigate_settings'
+        // }
+      ];
+
+      return {
+        header,
+        weightProgress: {
+          startWeight: startWeight || 0,
+          currentWeight: currentWeight || 0,
+          targetWeight: targetWeight || 0,
+          weightChangePerWeek: Math.round(weightChangePerWeek * 10) / 10 // Round to 1 decimal
+        },
+        dailyGoal,
+        lastCheckedIn: formattedLastCheckedIn,
+        nextCheckIn,
+        footerData
+      };
+    } catch (error) {
+      throw new Error(`Failed to fetch progress data: ${error.message}`);
+    }
   }
 }
 
