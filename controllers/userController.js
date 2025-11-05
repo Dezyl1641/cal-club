@@ -10,22 +10,32 @@ function updateUserProfile(req, res) {
     }
 
     // Only allow updating specific fields for security
-    const allowedFields = ['name', 'email', 'goals'];
+    const allowedFields = ['name', 'email'];
+    const allowedGoalFields = ['goal', 'targetGoal', 'targetWeight', 'dailyCalories', 'dailyProtein', 'dailyCarbs', 'dailyFats'];
     const filteredData = {};
     
+    // Handle top-level fields
     for (const field of allowedFields) {
       if (updateData[field] !== undefined) {
         filteredData[field] = updateData[field];
       }
     }
 
-    // Validate goals if provided
-    if (filteredData.goals) {
-      const validationErrors = validateGoals(filteredData.goals);
+    // Handle goals fields separately - use dot notation to update only provided fields
+    if (updateData.goals && typeof updateData.goals === 'object') {
+      // Validate goals if provided
+      const validationErrors = validateGoals(updateData.goals);
       if (validationErrors.length > 0) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Invalid goals data', details: validationErrors }));
         return;
+      }
+
+      // Build dot notation updates for goals fields
+      for (const field of allowedGoalFields) {
+        if (updateData.goals[field] !== undefined) {
+          filteredData[`goals.${field}`] = updateData.goals[field];
+        }
       }
     }
 
@@ -120,6 +130,24 @@ async function deleteUser(req, res) {
 
 function validateGoals(goals) {
   const errors = [];
+  
+  if (goals.goal !== undefined) {
+    if (typeof goals.goal !== 'string' || goals.goal.length > 200) {
+      errors.push('goal must be a string with max 200 characters');
+    }
+  }
+  
+  if (goals.targetGoal !== undefined) {
+    if (typeof goals.targetGoal !== 'string' || goals.targetGoal.length > 200) {
+      errors.push('targetGoal must be a string with max 200 characters');
+    }
+  }
+  
+  if (goals.targetWeight !== undefined) {
+    if (typeof goals.targetWeight !== 'number' || goals.targetWeight < 0 || goals.targetWeight > 500) {
+      errors.push('targetWeight must be a number between 0 and 500');
+    }
+  }
   
   if (goals.dailyCalories !== undefined) {
     if (typeof goals.dailyCalories !== 'number' || goals.dailyCalories < 0 || goals.dailyCalories > 10000) {
