@@ -511,7 +511,7 @@ class GoalService {
       height_cm: { type: 'number', min: 120, max: 220 },
       weight_kg: { type: 'number', min: 35, max: 250 },
       goal_type: { type: 'enum', values: ['lose', 'maintain', 'gain'] },
-      pace_kg_per_week: { type: 'number', min: -1.0, max: 0.5 }
+      pace_kg_per_week: { type: 'number', min: -1.5, max: 1.5 }
     };
 
     for (const [field, rules] of Object.entries(required)) {
