@@ -8,6 +8,7 @@ const onboardingRoutes = require('./onboardingRoutes');
 const subscriptionRoutes = require('./subscriptionRoutes');
 const webhookRoutes = require('./webhookRoutes');
 const goalRoutes = require('./goalRoutes');
+const userLogRoutes = require('./userLogRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -71,6 +72,11 @@ function setupRoutes(req, res) {
       // Goal calculation routes
       if (url.startsWith('/goals')) {
         return goalRoutes(req, res);
+      }
+
+      // User log routes
+      if (url.startsWith('/user-logs')) {
+        return userLogRoutes(req, res);
       }
 
       // Default 404

@@ -6,7 +6,7 @@ class OnboardingService {
     try {
       return await Question.find({ isActive: true })
         .sort({ sequence: 1 })
-        .select('_id text subtext type options sequence');
+        .select('_id text subtext type options sequence image');
     } catch (error) {
       throw new Error(`Failed to fetch active questions: ${error.message}`);
     }
