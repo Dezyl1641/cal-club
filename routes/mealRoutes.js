@@ -7,6 +7,7 @@ const routes = {
   'PATCH /meals/:id': mealController.updateMeal,
   'DELETE /meals/:id': mealController.deleteMeal,
   'POST /meals/update': mealController.updateMeal,
+  'POST /meals/bulk-edit': mealController.bulkEditItems,
   'GET /meals/summary/daily': mealController.getDailySummary,
   'GET /meals/calendar': mealController.getCalendarData
 };

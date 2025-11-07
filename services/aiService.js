@@ -327,6 +327,62 @@ Return only valid JSON, no additional text.`
     const calorieMatch = aiResult.match(/(\d+(?:\.\d+)?)\s*calories?/i);
     return calorieMatch ? parseFloat(calorieMatch[1]) : null;
   }
+
+  static async batchUpdateFoodItems(items, currentMealName, shouldUpdateMealName, mainItemInfo) {
+    const itemDescriptions = items.map((item, index) => 
+      `${index + 1}. ${item.originalName} → ${item.newName} | ${item.newQuantity} ${item.unit} | Main: ${item.isMainItem ? 'Yes' : 'No'}`
+    ).join('\n');
+
+    const mealNameInstruction = shouldUpdateMealName
+      ? `Update meal name (main changed: ${mainItemInfo.originalName} → ${mainItemInfo.newName})`
+      : `Keep meal name: "${currentMealName}"`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a world-class nutritionist and an expert in identifying food items, especially from diverse cuisines like Indian meals.`
+        },
+        {
+          role: 'user',
+          content: `Meal: "${currentMealName}"
+
+Updated items:
+${itemDescriptions}
+
+Action: ${mealNameInstruction}
+
+Return JSON:
+{
+  "items": [
+    {
+      "name": "item name",
+      "quantity": {"value": 1, "unit": "unit"},
+      "nutrition": {"calories": 150, "protein": 10, "carbs": 20, "fat": 5}
+    }
+  ],
+  "mealName": "updated or unchanged meal name",
+  "mealNameChanged": true/false
+}
+
+Guidelines:
+• Provide nutrition for EXACT quantity specified
+• Main items: proteins/primary carbs (paneer, chicken, rice, roti)
+• Minor items: sides/condiments (raita, salad, chutney)
+• Keep meal names concise (max 4-5 words)
+• If main item changed: update meal name
+• If only minor items changed: keep original name
+
+Return only valid JSON.`
+        }
+      ],
+      max_tokens: 1000,
+      response_format: { type: "json_object" }
+    });
+
+    return JSON.parse(completion.choices[0].message.content);
+  }
 }
 
 module.exports = AiService; 
