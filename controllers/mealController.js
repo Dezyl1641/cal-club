@@ -77,7 +77,10 @@ async function updateMeal(req, res) {
     try {
       const { mealId, itemId, newQuantity, newItem } = data;
       const userId = req.user.userId;
-
+      console.log('newQuantity: ' + newQuantity);
+      console.log('newItem: ' + newItem);
+      console.log('mealId: ' + mealId);
+      console.log('itemId: ' + itemId);
       // Get the meal and verify ownership
       const meal = await Meal.findOne({ _id: mealId, userId });
       if (!meal) {
