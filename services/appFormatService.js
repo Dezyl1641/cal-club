@@ -106,6 +106,7 @@ class AppFormatService {
       return {
         appBarData: this.formatAppBarData(todayData, goals.dailyCalories),
         weekViewData: this.formatWeekViewData(mondayDate, currentDate),
+        daySelectorData: this.formatDaySelectorData(currentDate),
         showFloatingActionButton: true,
         widgets: [
           this.formatMacroWidget(todayData, goals),
@@ -146,6 +147,61 @@ class AppFormatService {
     }
     
     return { days };
+  }
+
+  static formatDaySelectorData(currentDate) {
+    // Use IST timezone for all date operations
+    const istFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    
+    // Get today's date in IST
+    const now = new Date();
+    const todayIST = istFormatter.format(now);
+    const todayDate = new Date(todayIST + 'T00:00:00');
+    
+    // Get yesterday's date in IST
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterdayIST = istFormatter.format(yesterdayDate);
+    
+    // Format currentDate in IST
+    const dateToCheckIST = istFormatter.format(new Date(currentDate));
+    const dateToCheck = new Date(dateToCheckIST + 'T00:00:00');
+    
+    // Determine dayText
+    let dayText;
+    if (dateToCheckIST === todayIST) {
+      dayText = "TODAY";
+    } else if (dateToCheckIST === yesterdayIST) {
+      dayText = "YESTERDAY";
+    } else {
+      // Format as "DD MMM" (e.g., "07 Nov") using IST
+      // dateToCheckIST is in YYYY-MM-DD format, parse it directly
+      const [year, monthNum, day] = dateToCheckIST.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const month = monthNames[parseInt(monthNum) - 1]; // monthNum is 1-12, array is 0-indexed
+      dayText = `${day} ${month}`;
+    }
+    
+    // Determine if there's a previous day (always true, can always go back)
+    const prev = true;
+    
+    // Determine if there's a next day (true if current date is not today in IST)
+    const next = dateToCheckIST !== todayIST;
+    
+    // Format date as YYYY-MM-DD (already in IST format)
+    const date = dateToCheckIST;
+    
+    return {
+      dayText,
+      prev,
+      next,
+      date
+    };
   }
 
   static formatMacroWidget(todayData, goals) {
