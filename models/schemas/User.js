@@ -89,7 +89,6 @@ const userSchema = new mongoose.Schema({
 // Indexes
 userSchema.index({ phone: 1 });
 userSchema.index({ email: 1 });
-userSchema.index({ firebaseUid: 1 });
 userSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('User', userSchema, 'users'); 

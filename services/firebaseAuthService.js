@@ -74,7 +74,7 @@ class FirebaseAuthService {
 try {
   initializeFirebase();
 } catch (error) {
-  console.warn('Firebase initialization deferred. Will initialize on first use.');
+  console.warn('Firebase initialization deferred due to error: ', error.message);
 }
 
 module.exports = FirebaseAuthService;
