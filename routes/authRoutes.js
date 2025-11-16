@@ -2,7 +2,8 @@ const authController = require('../controllers/authController');
 
 const routes = {
   'POST /auth/request-otp': authController.requestOtp,
-  'POST /auth/verify-otp': authController.verifyOtp
+  'POST /auth/verify-otp': authController.verifyOtp,
+  'POST /auth/firebase/verify-token': authController.verifyFirebaseToken
 };
 
 function authRoutes(req, res) {

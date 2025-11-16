@@ -44,4 +44,29 @@ function verifyOtp(req, res) {
   });
 }
 
-module.exports = { requestOtp, verifyOtp }; 
+function verifyFirebaseToken(req, res) {
+  parseBody(req, async (err, data) => {
+    if (err || !data.idToken) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid request. Firebase ID token required.' }));
+      return;
+    }
+
+    try {
+      const result = await AuthService.verifyFirebaseToken(data.idToken);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      // Handle Firebase-specific errors
+      if (error.message.includes('expired') || error.message.includes('revoked') || error.message.includes('Invalid Firebase token')) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+      } else {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to verify Firebase token', details: error.message }));
+      }
+    }
+  });
+}
+
+module.exports = { requestOtp, verifyOtp, verifyFirebaseToken }; 

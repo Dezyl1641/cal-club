@@ -5,8 +5,10 @@ const {
   storeOtp,
   fetchOtp,
   deleteOtp,
-  storeAuthToken
+  storeAuthToken,
+  updateUser
 } = require('../models/user');
+const FirebaseAuthService = require('./firebaseAuthService');
 const parseBody = require('../utils/parseBody');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -98,6 +100,43 @@ class AuthService {
     await storeAuthToken(user._id, token, expiresAt);
 
     return { message: 'OTP verified successfully', token };
+  }
+
+  static async verifyFirebaseToken(idToken) {
+    // Verify Firebase ID token
+    const firebaseData = await FirebaseAuthService.verifyIdToken(idToken);
+    const { firebaseUid, phone } = firebaseData;
+
+    // Find or create user by phone number
+    let user = await findUserByPhone(phone);
+    
+    if (!user) {
+      // Create new user with phone, firebaseUid, and lastLoginAt
+      user = await createUser({ phone, firebaseUid, lastLoginAt: new Date() });
+    } else {
+      // Prepare update data
+      const updateData = { lastLoginAt: new Date() };
+      
+      // If user exists but is inactive, reactivate them
+      if (!user.isActive) {
+        updateData.isActive = true;
+      }
+      
+      // Link firebaseUid to existing user if not already linked
+      if (!user.firebaseUid) {
+        updateData.firebaseUid = firebaseUid;
+      }
+      
+      // Update user with all changes at once
+      user = await updateUser(user._id, updateData);
+    }
+
+    // Generate and store auth token (same as OTP flow)
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '14d' });
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+    await storeAuthToken(user._id, token, expiresAt);
+
+    return { message: 'Firebase token verified successfully', token };
   }
 }
 

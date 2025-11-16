@@ -3,7 +3,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 
 function jwtMiddleware(req, res, next) {
   if (
-    (req.url === '/auth/request-otp' || req.url === '/auth/verify-otp') &&
+    (req.url === '/auth/request-otp' || req.url === '/auth/verify-otp' || req.url === '/auth/firebase/verify-token') &&
     req.method === 'POST'
   ) {
     return next();
