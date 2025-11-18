@@ -9,6 +9,7 @@ const subscriptionRoutes = require('./subscriptionRoutes');
 const webhookRoutes = require('./webhookRoutes');
 const goalRoutes = require('./goalRoutes');
 const userLogRoutes = require('./userLogRoutes');
+const notificationRoutes = require('./notificationRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -77,6 +78,11 @@ function setupRoutes(req, res) {
       // User log routes
       if (url.startsWith('/user-logs')) {
         return userLogRoutes(req, res);
+      }
+
+      // Notification routes
+      if (url.startsWith('/notifications')) {
+        return notificationRoutes(req, res);
       }
 
       // Default 404
