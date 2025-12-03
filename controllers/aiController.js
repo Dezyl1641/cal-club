@@ -4,9 +4,9 @@ const mealFormatter = require('../utils/mealFormatter');
 
 function foodCalories(req, res) {
   parseBody(req, async (err, data) => {
-    if (err || !data.url) {
+    if (err || (!data.url && !data.hint)) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Image URL required in body as { "url": "..." }' }));
+      res.end(JSON.stringify({ error: 'Either image URL or hint (text description) is required in body as { "url": "..." } or { "hint": "..." } or both' }));
       return;
     }
 
@@ -19,7 +19,7 @@ function foodCalories(req, res) {
     };
 
     try {
-      const result = await AiService.analyzeFoodCalories(data.url, provider, req.user.userId, additionalData);
+      const result = await AiService.analyzeFoodCalories(data.url || null, data.hint || null, provider, req.user.userId, additionalData);
       
       // If a meal was saved, format it according to the new response format
       if (result.mealId) {

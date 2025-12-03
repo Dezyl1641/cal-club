@@ -23,20 +23,9 @@ class AiService {
     });
   }
 
-  static async analyzeFoodWithOpenAI(imageUrl) {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a nutrition expert. Analyze food photos and return structured JSON data with detailed nutrition information.'
-        },
-        {
-          role: 'user',
-          content: [
-            { 
-              type: 'text', 
-              text: `Analyze this food photo and return a JSON object with the following structure:
+  static async analyzeFoodWithOpenAI(imageUrl, hint) {
+    // Build prompt based on what's available
+    let promptText = `Analyze this food and return a JSON object with the following structure:
 {
   "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
   "items": [
@@ -57,17 +46,103 @@ class AiService {
   ]
 }
 
-IMPORTANT: For each item, provide the TOTAL quantity and nutrition for ALL of that item visible in the photo. For example:
+IMPORTANT: For each item, provide the TOTAL quantity and nutrition for ALL of that item. For example:
 - If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
 - If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
 - If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
 
 For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
 
-Return only valid JSON, no additional text.` 
-            },
-            { type: 'image_url', image_url: { url: imageUrl } }
-          ]
+Return only valid JSON, no additional text.`;
+
+    // Adjust prompt based on available inputs
+    if (imageUrl && hint) {
+      promptText = `Analyze this food photo along with the provided description and return a JSON object with the following structure:
+{
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "items": [
+    {
+      "name": "Item name",
+      "quantity": {
+        "value": 6,
+        "unit": "slices/pieces/cups/grams/etc"
+      },
+      "nutrition": {
+        "calories": 900,
+        "protein": 30,
+        "carbs": 150,
+        "fat": 18
+      },
+      "confidence": 0.85
+    }
+  ]
+}
+
+Food description: "${hint}"
+
+Use both the image and the description to accurately identify the food items and estimate nutrition. For each item, provide the TOTAL quantity and nutrition for ALL of that item visible in the photo. For example:
+- If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
+- If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
+- If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
+
+For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
+
+Return only valid JSON, no additional text.`;
+    } else if (hint && !imageUrl) {
+      promptText = `Based on the following food description, estimate nutrition and return a JSON object with the following structure:
+{
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "items": [
+    {
+      "name": "Item name",
+      "quantity": {
+        "value": 1,
+        "unit": "serving/pieces/cups/grams/etc"
+      },
+      "nutrition": {
+        "calories": 900,
+        "protein": 30,
+        "carbs": 150,
+        "fat": 18
+      },
+      "confidence": 0.85
+    }
+  ]
+}
+
+Food description: "${hint}"
+
+Based on the description, identify the food items and estimate nutrition for a typical serving. If the description mentions quantities (e.g., "2 rotis", "1 cup rice"), use those quantities. Otherwise, assume a standard serving size.
+
+For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
+
+Return only valid JSON, no additional text.`;
+    }
+
+    const content = [
+      { 
+        type: 'text', 
+        text: promptText
+      }
+    ];
+
+    // Add image if URL is provided
+    if (imageUrl) {
+      content.push({ type: 'image_url', image_url: { url: imageUrl } });
+    }
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: imageUrl 
+            ? 'You are a nutrition expert. Analyze food photos and return structured JSON data with detailed nutrition information.'
+            : 'You are a nutrition expert. Analyze food descriptions and return structured JSON data with detailed nutrition information.'
+        },
+        {
+          role: 'user',
+          content: content
         }
       ],
       max_tokens: 1000,
@@ -76,9 +151,50 @@ Return only valid JSON, no additional text.`
     return completion.choices[0].message.content;
   }
 
-  static async analyzeFoodWithGemini(imageUrl) {
+  static async analyzeFoodWithGemini(imageUrl, hint) {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    const prompt = `You are a nutrition expert. Analyze this food photo and return a JSON object with the following structure:
+    
+    // Build prompt based on what's available
+    let prompt = '';
+    const parts = [];
+
+    if (imageUrl && hint) {
+      prompt = `You are a nutrition expert. Analyze this food photo along with the provided description and return a JSON object with the following structure:
+
+{
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "items": [
+    {
+      "name": "Item name",
+      "quantity": {
+        "value": 6,
+        "unit": "slices/pieces/cups/grams/etc"
+      },
+      "nutrition": {
+        "calories": 900,
+        "protein": 30,
+        "carbs": 150,
+        "fat": 18
+      },
+      "confidence": 0.85
+    }
+  ]
+}
+
+Food description: "${hint}"
+
+Use both the image and the description to accurately identify the food items and estimate nutrition. For each item, provide the TOTAL quantity and nutrition for ALL of that item visible in the photo. For example:
+- If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
+- If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
+- If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
+
+For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
+
+Return only valid JSON, no additional text.`;
+      parts.push({ text: prompt });
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
+    } else if (imageUrl && !hint) {
+      prompt = `You are a nutrition expert. Analyze this food photo and return a JSON object with the following structure:
 
 {
   "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
@@ -108,15 +224,46 @@ IMPORTANT: For each item, provide the TOTAL quantity and nutrition for ALL of th
 For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
 
 Return only valid JSON, no additional text.`;
+      parts.push({ text: prompt });
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
+    } else if (hint && !imageUrl) {
+      prompt = `You are a nutrition expert. Based on the following food description, estimate nutrition and return a JSON object with the following structure:
+
+{
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "items": [
+    {
+      "name": "Item name",
+      "quantity": {
+        "value": 1,
+        "unit": "serving/pieces/cups/grams/etc"
+      },
+      "nutrition": {
+        "calories": 900,
+        "protein": 30,
+        "carbs": 150,
+        "fat": 18
+      },
+      "confidence": 0.85
+    }
+  ]
+}
+
+Food description: "${hint}"
+
+Based on the description, identify the food items and estimate nutrition for a typical serving. If the description mentions quantities (e.g., "2 rotis", "1 cup rice"), use those quantities. Otherwise, assume a standard serving size.
+
+For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
+
+Return only valid JSON, no additional text.`;
+      parts.push({ text: prompt });
+    }
     
     const result = await model.generateContent({
       contents: [
         {
           role: 'user',
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } }
-          ]
+          parts: parts
         }
       ]
     });
@@ -178,16 +325,16 @@ Return only valid JSON, no additional text.`
     return completion.choices[0].message.content;
   }
 
-  static async analyzeFoodCalories(imageUrl, provider = 'openai', userId = null, additionalData = {}) {
+  static async analyzeFoodCalories(imageUrl, hint, provider = 'openai', userId = null, additionalData = {}) {
     try {
       let result;
       let llmModel;
       
       if (provider === 'gemini') {
-        result = await this.analyzeFoodWithGemini(imageUrl);
+        result = await this.analyzeFoodWithGemini(imageUrl, hint);
         llmModel = 'gemini-1.5-flash';
       } else {
-        result = await this.analyzeFoodWithOpenAI(imageUrl);
+        result = await this.analyzeFoodWithOpenAI(imageUrl, hint);
         llmModel = 'gpt-4o';
       }
       
@@ -195,7 +342,9 @@ Return only valid JSON, no additional text.`
       let savedMeal = null;
       console.log('userId', userId);
       if (userId) {
-        savedMeal = await this.saveMealData(userId, imageUrl, result, provider, llmModel, additionalData);
+        // Use imageUrl if available, otherwise use hint as a reference
+        const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
+        savedMeal = await this.saveMealData(userId, imageReference, result, provider, llmModel, additionalData);
       }
       
       return { 
@@ -204,7 +353,7 @@ Return only valid JSON, no additional text.`
         mealId: savedMeal ? savedMeal._id : null
       };
     } catch (error) {
-      throw new Error(`Failed to analyze image: ${error.message}`);
+      throw new Error(`Failed to analyze food: ${error.message}`);
     }
   }
 
@@ -246,14 +395,20 @@ Return only valid JSON, no additional text.`
         confidence: item.confidence || null // Use AI confidence or default to null
       }));
       
-      const mealData = {
-        userId,
-        capturedAt: additionalData.capturedAt || new Date(),
-        photos: [{
+      // Handle photos array - only include if imageUrl is a valid URL
+      const photos = [];
+      if (imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+        photos.push({
           url: imageUrl,
           width: additionalData.width || null,
           height: additionalData.height || null
-        }],
+        });
+      }
+
+      const mealData = {
+        userId,
+        capturedAt: additionalData.capturedAt || new Date(),
+        photos: photos,
         llmVersion: '1.0',
         llmModel,
         name: parsedResult.mealName,
