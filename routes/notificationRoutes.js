@@ -3,7 +3,10 @@ const notificationController = require('../controllers/notificationController');
 const routes = {
   'POST /notifications/register-token': notificationController.registerToken,
   'POST /notifications/deregister-token': notificationController.deregisterToken,
-  'POST /notifications/send': notificationController.sendNotification
+  'POST /notifications/send': notificationController.sendNotification,
+  'POST /notifications/preferences': notificationController.createPreference,
+  'GET /notifications/preferences': notificationController.getPreferences,
+  'POST /notifications/test-reminder': notificationController.testReminder
 };
 
 function notificationRoutes(req, res) {
@@ -14,6 +17,12 @@ function notificationRoutes(req, res) {
 
   if (handler) {
     handler(req, res);
+    return true;
+  }
+
+  // Handle DELETE /notifications/preferences/:type
+  if (req.method === 'DELETE' && basePath.startsWith('/notifications/preferences/')) {
+    notificationController.deletePreference(req, res);
     return true;
   }
 

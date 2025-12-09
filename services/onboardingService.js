@@ -2,6 +2,7 @@ const Question = require('../models/schemas/Question');
 const UserQuestion = require('../models/schemas/UserQuestion');
 const UserLog = require('../models/schemas/UserLog');
 const mongoose = require('mongoose');
+const { createNotificationPreferencesFromString } = require('../models/notificationPreference');
 
 class OnboardingService {
   /**
@@ -260,6 +261,33 @@ class OnboardingService {
               console.error('Background target goal update failed:', err);
             });
           }
+        }
+      }
+
+      // Handle meal notification preferences question
+      const MEAL_NOTIFICATION_QUESTION_ID = '6908fe66896ccf24778c9087';
+      const mealNotificationAnswer = answers.find(answer => {
+        const questionIdStr = answer.questionId?.toString();
+        return questionIdStr === MEAL_NOTIFICATION_QUESTION_ID;
+      });
+
+      if (mealNotificationAnswer && mealNotificationAnswer.values && mealNotificationAnswer.values.length > 0) {
+        // Extract answer string from values array (first element)
+        // Format: "Morning:08:00 AM:true,Lunch:01:00 PM:false,Dinner:07:00 PM:false"
+        const reminderString = mealNotificationAnswer.values[0];
+        if (reminderString && typeof reminderString === 'string') {
+          console.log('🔔 [ONBOARDING] Processing meal notification preferences...');
+          console.log('🔔 [ONBOARDING] User:', mealNotificationAnswer.userId);
+          console.log('🔔 [ONBOARDING] Reminder string:', reminderString);
+          
+          // Create notification preferences in background (don't await to avoid blocking response)
+          createNotificationPreferencesFromString(mealNotificationAnswer.userId, reminderString)
+            .then(prefs => {
+              console.log(`✅ [ONBOARDING] Created ${prefs.length} meal notification preferences`);
+            })
+            .catch(err => {
+              console.error('❌ [ONBOARDING] Background notification preference creation failed:', err);
+            });
         }
       }
 

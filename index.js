@@ -3,6 +3,7 @@ const http = require('http');
 const jwtMiddleware = require('./middleware/auth');
 const setupRoutes = require('./routes/index');
 const { connectToMongo } = require('./config/db');
+const { initializeMealReminderCron, getCurrentTimeIST } = require('./services/scheduledNotificationService');
 
 const PORT = process.env.PORT || 3000;
 
@@ -15,5 +16,9 @@ const server = http.createServer(async (req, res) => {
 connectToMongo().then(() => {
   server.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}/`);
+    console.log(`Current IST time: ${getCurrentTimeIST()}`);
+    
+    // Initialize meal reminder cron job
+    initializeMealReminderCron();
   });
 }); 

@@ -25,96 +25,159 @@ class AiService {
 
   static async analyzeFoodWithOpenAI(imageUrl, hint) {
     // Build prompt based on what's available
-    let promptText = `Analyze this food and return a JSON object with the following structure:
-{
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
-  "items": [
-    {
-      "name": "Item name",
-      "quantity": {
-        "value": 6,
-        "unit": "slices/pieces/cups/grams/etc"
-      },
-      "nutrition": {
-        "calories": 900,
-        "protein": 30,
-        "carbs": 150,
-        "fat": 18
-      },
-      "confidence": 0.85
-    }
-  ]
-}
-
-IMPORTANT: For each item, provide the TOTAL quantity and nutrition for ALL of that item. For example:
-- If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
-- If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
-- If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
-
-For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
-
-Return only valid JSON, no additional text.`;
+    let promptText = '';
 
     // Adjust prompt based on available inputs
     if (imageUrl && hint) {
-      promptText = `Analyze this food photo along with the provided description and return a JSON object with the following structure:
+      // IMAGE + TEXT CASE
+      promptText = `### ROLE
+You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to analyze food images with high precision to assist in dietary tracking.
+
+### INPUT DATA
+1. *Image:* Photo of a meal (served state).
+2. *User Hint:* "${hint}"
+
+### INSTRUCTIONS
+
+1. *Visual Analysis & Scale Calibration:*
+   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (forks ~20cm), glassware, or standard dinner plates (25-28cm). Use these to estimate the actual volume of the food.
+   * *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils/butters/glazes. You must account for these "hidden calories" in your macro estimation.
+
+2. *Item Identification & Context Integration:*
+   * *Identify All Items:* Segment the image and identify every distinct food item visible on the plate.
+   * *Context Usage:* Use the *User Hint* to resolve specific ambiguities (e.g., "made with oat milk" vs "cow milk").
+   * *Conflict Resolution:* If the User Hint contradicts strong visual evidence (e.g., User says "Salad" but image shows "Pizza"), *prioritize the Visual Evidence* for identification to prevent false tracking.
+
+3. *Scientific Calculation (Cooked vs. Raw):*
+   * *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
+   * *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
+   * *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3x) before calculating macros.
+
+4. *Quantification (User-Friendly):*
+   * Estimate portion sizes using volume-based, user-friendly terms.
+   * Preferred Units: Cups, tablespoons, slices, pieces, "fist-sized", "palm-sized".
+   * Avoid giving specific gram weights unless the user provided them, as visual weight estimation is prone to error.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
+
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Grilled Chicken Breast')",
   "items": [
     {
-      "name": "Item name",
+      "name": "Item Name (e.g., Grilled Chicken Breast)",
       "quantity": {
-        "value": 6,
-        "unit": "slices/pieces/cups/grams/etc"
+        "value": 1,
+        "unit": "palm-sized piece/cups/slices/pieces/etc"
       },
       "nutrition": {
-        "calories": 900,
-        "protein": 30,
-        "carbs": 150,
-        "fat": 18
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
-      "confidence": 0.85
+      "confidence": 0.0-1.0
     }
   ]
 }
-
-Food description: "${hint}"
-
-Use both the image and the description to accurately identify the food items and estimate nutrition. For each item, provide the TOTAL quantity and nutrition for ALL of that item visible in the photo. For example:
-- If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
-- If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
-- If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
-
-For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
 
 Return only valid JSON, no additional text.`;
     } else if (hint && !imageUrl) {
-      promptText = `Based on the following food description, estimate nutrition and return a JSON object with the following structure:
+      // TEXT ONLY CASE
+      promptText = `### ROLE
+You are an expert AI Nutritionist and Database Specialist. Your goal is to parse natural language food logs into structured nutritional data.
+
+### INPUT DATA
+User text string: "${hint}"
+
+### INSTRUCTIONS
+
+1. *Entity & Quantity Extraction:*
+   * Parse the text to identify the *Food Item* and the *Quantity/Unit*.
+   * Default Logic: If quantity is unspecified (e.g., "an apple"), assume *1 Standard Serving* (e.g., 1 Medium Apple).
+
+2. *Brand vs. Generic Logic:*
+   * *Explicit Brand:* If the user names a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), you MUST prioritize searching your internal knowledge base for that specific brand's nutritional values.
+     * Note on Scoops: Brand-specific scoops vary (e.g., one scoop might be 30g, another 45g). Use the specific brand's standard serving size.
+   * *Generic:* If no brand is mentioned (e.g., "one apple," "boiled egg"), use standard USDA-equivalent averages for a *Medium* size.
+
+3. *Macro Calculation:*
+   * Calculate Calories, Protein, Carbs, and Fats based on the extracted quantity.
+   * Sum up the total meal values.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
+
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "mealName": "Overall meal name (e.g., 'The Whole Truth Protein Shake', 'Banana and Eggs')",
   "items": [
     {
-      "name": "Item name",
+      "name": "Item Name (e.g., The Whole Truth Protein - Chocolate)",
       "quantity": {
         "value": 1,
-        "unit": "serving/pieces/cups/grams/etc"
+        "unit": "Scoop/piece/cup/serving/etc"
       },
       "nutrition": {
-        "calories": 900,
-        "protein": 30,
-        "carbs": 150,
-        "fat": 18
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
-      "confidence": 0.85
+      "confidence": 0.0-1.0
     }
   ]
 }
 
-Food description: "${hint}"
+Return only valid JSON, no additional text.`;
+    } else {
+      // IMAGE ONLY CASE (default)
+      promptText = `### ROLE
+You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to analyze food images with high precision to assist in dietary tracking.
 
-Based on the description, identify the food items and estimate nutrition for a typical serving. If the description mentions quantities (e.g., "2 rotis", "1 cup rice"), use those quantities. Otherwise, assume a standard serving size.
+### INPUT DATA
+*Image:* Photo of a meal (served state).
 
-For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
+### INSTRUCTIONS
+
+1. *Visual Analysis & Scale Calibration:*
+   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (forks ~20cm), glassware, or standard dinner plates (25-28cm). Use these to estimate the actual volume of the food.
+   * *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils/butters/glazes. You must account for these "hidden calories" in your macro estimation.
+
+2. *Item Identification:*
+   * *Identify All Items:* Segment the image and identify every distinct food item visible on the plate.
+
+3. *Scientific Calculation (Cooked vs. Raw):*
+   * *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
+   * *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
+   * *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3x) before calculating macros.
+
+4. *Quantification (User-Friendly):*
+   * Estimate portion sizes using volume-based, user-friendly terms.
+   * Preferred Units: Cups, tablespoons, slices, pieces, "fist-sized", "palm-sized".
+   * Avoid giving specific gram weights as visual weight estimation is prone to error.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
+
+{
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Grilled Chicken Breast')",
+  "items": [
+    {
+      "name": "Item Name (e.g., Grilled Chicken Breast)",
+      "quantity": {
+        "value": 1,
+        "unit": "palm-sized piece/cups/slices/pieces/etc"
+      },
+      "nutrition": {
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
+      },
+      "confidence": 0.0-1.0
+    }
+  ]
+}
 
 Return only valid JSON, no additional text.`;
     }
@@ -159,101 +222,159 @@ Return only valid JSON, no additional text.`;
     const parts = [];
 
     if (imageUrl && hint) {
-      prompt = `You are a nutrition expert. Analyze this food photo along with the provided description and return a JSON object with the following structure:
+      // IMAGE + TEXT CASE
+      prompt = `### ROLE
+You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to analyze food images with high precision to assist in dietary tracking.
+
+### INPUT DATA
+1. *Image:* Photo of a meal (served state).
+2. *User Hint:* "${hint}"
+
+### INSTRUCTIONS
+
+1. *Visual Analysis & Scale Calibration:*
+   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (forks ~20cm), glassware, or standard dinner plates (25-28cm). Use these to estimate the actual volume of the food.
+   * *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils/butters/glazes. You must account for these "hidden calories" in your macro estimation.
+
+2. *Item Identification & Context Integration:*
+   * *Identify All Items:* Segment the image and identify every distinct food item visible on the plate.
+   * *Context Usage:* Use the *User Hint* to resolve specific ambiguities (e.g., "made with oat milk" vs "cow milk").
+   * *Conflict Resolution:* If the User Hint contradicts strong visual evidence (e.g., User says "Salad" but image shows "Pizza"), *prioritize the Visual Evidence* for identification to prevent false tracking.
+
+3. *Scientific Calculation (Cooked vs. Raw):*
+   * *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
+   * *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
+   * *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3x) before calculating macros.
+
+4. *Quantification (User-Friendly):*
+   * Estimate portion sizes using volume-based, user-friendly terms.
+   * Preferred Units: Cups, tablespoons, slices, pieces, "fist-sized", "palm-sized".
+   * Avoid giving specific gram weights unless the user provided them, as visual weight estimation is prone to error.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
 
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Grilled Chicken Breast')",
   "items": [
     {
-      "name": "Item name",
+      "name": "Item Name (e.g., Grilled Chicken Breast)",
       "quantity": {
-        "value": 6,
-        "unit": "slices/pieces/cups/grams/etc"
+        "value": 1,
+        "unit": "palm-sized piece/cups/slices/pieces/etc"
       },
       "nutrition": {
-        "calories": 900,
-        "protein": 30,
-        "carbs": 150,
-        "fat": 18
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
-      "confidence": 0.85
+      "confidence": 0.0-1.0
     }
   ]
 }
-
-Food description: "${hint}"
-
-Use both the image and the description to accurately identify the food items and estimate nutrition. For each item, provide the TOTAL quantity and nutrition for ALL of that item visible in the photo. For example:
-- If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
-- If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
-- If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
-
-For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
 
 Return only valid JSON, no additional text.`;
       parts.push({ text: prompt });
       parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
     } else if (imageUrl && !hint) {
-      prompt = `You are a nutrition expert. Analyze this food photo and return a JSON object with the following structure:
+      // IMAGE ONLY CASE
+      prompt = `### ROLE
+You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to analyze food images with high precision to assist in dietary tracking.
+
+### INPUT DATA
+*Image:* Photo of a meal (served state).
+
+### INSTRUCTIONS
+
+1. *Visual Analysis & Scale Calibration:*
+   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (forks ~20cm), glassware, or standard dinner plates (25-28cm). Use these to estimate the actual volume of the food.
+   * *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils/butters/glazes. You must account for these "hidden calories" in your macro estimation.
+
+2. *Item Identification:*
+   * *Identify All Items:* Segment the image and identify every distinct food item visible on the plate.
+
+3. *Scientific Calculation (Cooked vs. Raw):*
+   * *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
+   * *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
+   * *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3x) before calculating macros.
+
+4. *Quantification (User-Friendly):*
+   * Estimate portion sizes using volume-based, user-friendly terms.
+   * Preferred Units: Cups, tablespoons, slices, pieces, "fist-sized", "palm-sized".
+   * Avoid giving specific gram weights as visual weight estimation is prone to error.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
 
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Grilled Chicken Breast')",
   "items": [
     {
-      "name": "Item name",
+      "name": "Item Name (e.g., Grilled Chicken Breast)",
       "quantity": {
-        "value": 6,
-        "unit": "slices/pieces/cups/grams/etc"
+        "value": 1,
+        "unit": "palm-sized piece/cups/slices/pieces/etc"
       },
       "nutrition": {
-        "calories": 900,
-        "protein": 30,
-        "carbs": 150,
-        "fat": 18
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
-      "confidence": 0.85
+      "confidence": 0.0-1.0
     }
   ]
 }
-
-IMPORTANT: For each item, provide the TOTAL quantity and nutrition for ALL of that item visible in the photo. For example:
-- If you see 6 pizza slices, return quantity: 6, unit: "slices" and nutrition for all 6 slices combined
-- If you see 3 apples, return quantity: 3, unit: "pieces" and nutrition for all 3 apples combined
-- If you see 2 cups of rice, return quantity: 2, unit: "cups" and nutrition for all 2 cups combined
-
-For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
 
 Return only valid JSON, no additional text.`;
       parts.push({ text: prompt });
       parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
     } else if (hint && !imageUrl) {
-      prompt = `You are a nutrition expert. Based on the following food description, estimate nutrition and return a JSON object with the following structure:
+      // TEXT ONLY CASE
+      prompt = `### ROLE
+You are an expert AI Nutritionist and Database Specialist. Your goal is to parse natural language food logs into structured nutritional data.
+
+### INPUT DATA
+User text string: "${hint}"
+
+### INSTRUCTIONS
+
+1. *Entity & Quantity Extraction:*
+   * Parse the text to identify the *Food Item* and the *Quantity/Unit*.
+   * Default Logic: If quantity is unspecified (e.g., "an apple"), assume *1 Standard Serving* (e.g., 1 Medium Apple).
+
+2. *Brand vs. Generic Logic:*
+   * *Explicit Brand:* If the user names a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), you MUST prioritize searching your internal knowledge base for that specific brand's nutritional values.
+     * Note on Scoops: Brand-specific scoops vary (e.g., one scoop might be 30g, another 45g). Use the specific brand's standard serving size.
+   * *Generic:* If no brand is mentioned (e.g., "one apple," "boiled egg"), use standard USDA-equivalent averages for a *Medium* size.
+
+3. *Macro Calculation:*
+   * Calculate Calories, Protein, Carbs, and Fats based on the extracted quantity.
+   * Sum up the total meal values.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
 
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Banana, Apple and Eggs')",
+  "mealName": "Overall meal name (e.g., 'The Whole Truth Protein Shake', 'Banana and Eggs')",
   "items": [
     {
-      "name": "Item name",
+      "name": "Item Name (e.g., The Whole Truth Protein - Chocolate)",
       "quantity": {
         "value": 1,
-        "unit": "serving/pieces/cups/grams/etc"
+        "unit": "Scoop/piece/cup/serving/etc"
       },
       "nutrition": {
-        "calories": 900,
-        "protein": 30,
-        "carbs": 150,
-        "fat": 18
+        "calories": 0,
+        "protein": 0,
+        "carbs": 0,
+        "fat": 0
       },
-      "confidence": 0.85
+      "confidence": 0.0-1.0
     }
   ]
 }
-
-Food description: "${hint}"
-
-Based on the description, identify the food items and estimate nutrition for a typical serving. If the description mentions quantities (e.g., "2 rotis", "1 cup rice"), use those quantities. Otherwise, assume a standard serving size.
-
-For each item, provide a confidence score between 0 and 1 indicating how certain you are about the identification and nutrition estimates. Higher values indicate more confidence.
 
 Return only valid JSON, no additional text.`;
       parts.push({ text: prompt });
