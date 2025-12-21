@@ -6,23 +6,36 @@ const parseBody = require('../utils/parseBody');
 
 // Note: Signature verification removed as it's disabled in Razorpay dashboard
 
-// Helper function to create membership
+/**
+ * Calculate end date based on plan duration
+ */
+function calculateEndDate(startDate, plan) {
+  const endDate = new Date(startDate);
+  
+  // Add duration based on plan
+  if (plan.durationUnit === 'day' || plan.durationUnit === 'days') {
+    endDate.setDate(endDate.getDate() + plan.duration);
+  } else if (plan.durationUnit === 'week' || plan.durationUnit === 'weeks') {
+    endDate.setDate(endDate.getDate() + (plan.duration * 7));
+  } else if (plan.durationUnit === 'month' || plan.durationUnit === 'months') {
+    endDate.setMonth(endDate.getMonth() + plan.duration);
+  } else if (plan.durationUnit === 'year' || plan.durationUnit === 'years') {
+    endDate.setFullYear(endDate.getFullYear() + plan.duration);
+  }
+  
+  // Round to end of day
+  endDate.setHours(23, 59, 59, 999);
+  
+  return endDate;
+}
+
+/**
+ * Create initial membership (on first payment/authentication)
+ */
 async function createMembership(subscription, plan) {
   try {
     const startDate = new Date();
-    const endDate = new Date(startDate);
-    
-    // Add duration based on plan
-    if (plan.durationUnit === 'days') {
-      endDate.setDate(endDate.getDate() + plan.duration);
-    } else if (plan.durationUnit === 'months') {
-      endDate.setMonth(endDate.getMonth() + plan.duration);
-    } else if (plan.durationUnit === 'years') {
-      endDate.setFullYear(endDate.getFullYear() + plan.duration);
-    }
-    
-    // Round to end of day
-    endDate.setHours(23, 59, 59, 999);
+    const endDate = calculateEndDate(startDate, plan);
     
     const membership = new Membership({
       userId: subscription.userId,
@@ -35,16 +48,84 @@ async function createMembership(subscription, plan) {
     
     await membership.save();
     
-    console.log('✅ MEMBERSHIP CREATED');
-    console.log('User ID:', subscription.userId);
-    console.log('Plan:', plan.title);
-    console.log('Start:', startDate);
-    console.log('End:', endDate);
-    console.log('Duration:', plan.duration, plan.durationUnit);
+    console.log('✅ [RAZORPAY] MEMBERSHIP CREATED (Initial)');
+    console.log('   User ID:', subscription.userId);
+    console.log('   Plan:', plan.title);
+    console.log('   Start:', startDate);
+    console.log('   End:', endDate);
+    console.log('   Duration:', plan.duration, plan.durationUnit);
     
     return membership;
   } catch (error) {
-    console.error('❌ ERROR CREATING MEMBERSHIP:', error);
+    console.error('❌ [RAZORPAY] ERROR CREATING MEMBERSHIP:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create new membership for subscription renewal
+ * Each renewal creates a new membership record for that billing cycle
+ */
+async function createRenewalMembership(subscription, plan) {
+  try {
+    // Find the latest membership to determine the new start date
+    const latestMembership = await Membership.findOne({
+      subscriptionId: subscription._id
+    }).sort({ end: -1 });
+
+    let startDate;
+    
+    if (latestMembership && latestMembership.end > new Date()) {
+      // If current membership hasn't expired, new one starts after it
+      startDate = new Date(latestMembership.end);
+      startDate.setSeconds(startDate.getSeconds() + 1); // Start 1 second after previous ends
+    } else {
+      // If no membership or expired, start from now
+      startDate = new Date();
+    }
+    
+    // Reset to start of day for clean dates
+    startDate.setHours(0, 0, 0, 0);
+    
+    const endDate = calculateEndDate(startDate, plan);
+
+    // Check if membership for this exact period already exists (idempotency)
+    // Check within a 1-minute window to handle timing differences
+    const existingMembership = await Membership.findOne({
+      subscriptionId: subscription._id,
+      start: { 
+        $gte: new Date(startDate.getTime() - 60000),  // 1 minute before
+        $lte: new Date(startDate.getTime() + 60000)   // 1 minute after
+      }
+    });
+
+    if (existingMembership) {
+      console.log('⚠️ [RAZORPAY] Renewal membership for this period already exists:', existingMembership._id);
+      return existingMembership;
+    }
+
+    const newMembership = new Membership({
+      userId: subscription.userId,
+      subscriptionId: subscription._id,
+      planId: plan._id,
+      start: startDate,
+      end: endDate,
+      status: 'purchased'
+    });
+    
+    await newMembership.save();
+    
+    console.log('✅ [RAZORPAY] MEMBERSHIP CREATED (Renewal)');
+    console.log('   User ID:', subscription.userId);
+    console.log('   Membership ID:', newMembership._id);
+    console.log('   Plan:', plan.title);
+    console.log('   Start:', startDate);
+    console.log('   End:', endDate);
+    console.log('   Duration:', plan.duration, plan.durationUnit);
+    
+    return newMembership;
+  } catch (error) {
+    console.error('❌ [RAZORPAY] ERROR CREATING RENEWAL MEMBERSHIP:', error);
     throw error;
   }
 }
@@ -172,20 +253,51 @@ async function handleRazorpayWebhook(req, res) {
       console.log('Event Status:', newStatus);
     }
 
-    // Create membership for subscription.authenticated event
+    // Create membership for subscription.authenticated event (first payment)
     if (event === 'subscription.authenticated') {
       try {
         // Find the plan using external_plan_id
         const plan = await Plan.findOne({ external_plan_id: subscription.external_plan_id });
         
         if (!plan) {
-          console.error('❌ PLAN NOT FOUND');
-          console.error('External Plan ID:', subscription.external_plan_id);
+          console.error('❌ [RAZORPAY] PLAN NOT FOUND');
+          console.error('   External Plan ID:', subscription.external_plan_id);
         } else {
           await createMembership(subscription, plan);
         }
       } catch (error) {
-        console.error('❌ ERROR CREATING MEMBERSHIP:', error);
+        console.error('❌ [RAZORPAY] ERROR CREATING MEMBERSHIP:', error);
+        // Don't fail the webhook for membership creation errors
+      }
+    }
+
+    // Create new membership for subscription.charged event (renewals)
+    // Note: subscription.charged is also sent on first payment, but we check if membership exists
+    if (event === 'subscription.charged') {
+      try {
+        // Check if this is first charge or renewal
+        const existingMembership = await Membership.findOne({
+          subscriptionId: subscription._id
+        });
+
+        if (existingMembership) {
+          // This is a renewal - create new membership for the new billing cycle
+          console.log('🔄 [RAZORPAY] Processing subscription renewal...');
+          
+          const plan = await Plan.findOne({ external_plan_id: subscription.external_plan_id });
+          
+          if (!plan) {
+            console.error('❌ [RAZORPAY] PLAN NOT FOUND FOR RENEWAL');
+            console.error('   External Plan ID:', subscription.external_plan_id);
+          } else {
+            await createRenewalMembership(subscription, plan);
+          }
+        } else {
+          // First charge - membership should be created by subscription.authenticated
+          console.log('ℹ️ [RAZORPAY] First charge detected, membership will be created by authenticated event');
+        }
+      } catch (error) {
+        console.error('❌ [RAZORPAY] ERROR PROCESSING RENEWAL:', error);
         // Don't fail the webhook for membership creation errors
       }
     }

@@ -4,7 +4,7 @@ const paymentEventSchema = new mongoose.Schema({
   merchant: {
     type: String,
     required: true,
-    enum: ['RAZORPAY', 'STRIPE', 'PAYPAL'],
+    enum: ['RAZORPAY', 'GOOGLE_PLAY', 'APPLE', 'STRIPE', 'PAYPAL'],
     default: 'RAZORPAY'
   },
   external_subscription_id: {

@@ -1,10 +1,15 @@
 const subscriptionController = require('../controllers/subscriptionController');
 
 const routes = {
+  // Razorpay subscription routes
   'POST /subscriptions': subscriptionController.createSubscription,
   'GET /subscriptions': subscriptionController.getSubscription,
   'GET /plans': subscriptionController.getActivePlans,
-  'POST /memberships/cancel': subscriptionController.cancelMembership
+  'POST /memberships/cancel': subscriptionController.cancelMembership,
+  
+  // Google Play subscription routes
+  'POST /subscriptions/google-play/verify': subscriptionController.verifyGooglePlayPurchase,
+  'POST /subscriptions/google-play/status': subscriptionController.getGooglePlaySubscriptionStatus
 };
 
 function subscriptionRoutes(req, res) {
@@ -12,7 +17,7 @@ function subscriptionRoutes(req, res) {
   const basePath = req.url.split('?')[0];
   const routeKey = `${req.method} ${basePath}`;
   
-  // Check for exact matches first
+  // Check for exact matches first (including Google Play routes)
   const handler = routes[routeKey];
   if (handler) {
     handler(req, res);
@@ -20,8 +25,8 @@ function subscriptionRoutes(req, res) {
   }
 
   // Check for dynamic routes (like /subscriptions/:id)
-  if (req.method === 'GET' && basePath.startsWith('/subscriptions/')) {
-    const subscriptionController = require('../controllers/subscriptionController');
+  // But not for google-play routes which should be handled above
+  if (req.method === 'GET' && basePath.startsWith('/subscriptions/') && !basePath.includes('google-play')) {
     subscriptionController.getSubscriptionById(req, res);
     return true;
   }

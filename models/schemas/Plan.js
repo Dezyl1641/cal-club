@@ -29,11 +29,30 @@ const planSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  // Razorpay plan ID
   external_plan_id: {
     type: String,
     required: true,
     unique: true,
     trim: true
+  },
+  // Google Play product/subscription ID
+  googleplay_product_id: {
+    type: String,
+    trim: true,
+    sparse: true // Allow null, but unique when present
+  },
+  // Apple App Store product ID (for future use)
+  appstore_product_id: {
+    type: String,
+    trim: true,
+    sparse: true
+  },
+  // Platform availability
+  platform: {
+    type: String,
+    enum: ['ALL', 'ANDROID', 'IOS', 'WEB'],
+    default: 'ALL'
   },
   isActive: {
     type: Boolean,
@@ -47,5 +66,8 @@ const planSchema = new mongoose.Schema({
 // external_plan_id already has unique index from schema definition
 planSchema.index({ isActive: 1 });
 planSchema.index({ createdAt: -1 });
+planSchema.index({ googleplay_product_id: 1 }, { sparse: true });
+planSchema.index({ appstore_product_id: 1 }, { sparse: true });
+planSchema.index({ platform: 1 });
 
 module.exports = mongoose.model('Plan', planSchema, 'plans');

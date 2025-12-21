@@ -83,12 +83,12 @@ function setupRoutes(req, res) {
       // Notification routes
       if (url.startsWith('/notifications')) {
         return notificationRoutes(req, res);
-      }
+  }
 
-      // Default 404
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Route not found' }));
-      return true;
+  // Default 404
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Route not found' }));
+  return true;
 }
 
 module.exports = setupRoutes; 
