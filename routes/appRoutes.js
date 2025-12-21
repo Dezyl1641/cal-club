@@ -2,7 +2,8 @@ const appController = require('../controllers/appController');
 
 const routes = {
   'GET /app/calendar': appController.getAppCalendar,
-  'GET /app/progress': appController.getProgress
+  'GET /app/progress': appController.getProgress,
+  'GET /app/settings': appController.getSettings
 };
 
 function appRoutes(req, res) {

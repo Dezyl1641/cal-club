@@ -4,7 +4,11 @@ const parseBody = require('../utils/parseBody');
 class OnboardingController {
   static async getQuestions(req, res) {
     try {
-      const questions = await OnboardingService.getActiveQuestions();
+      // Extract type query parameter
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      const type = url.searchParams.get('type');
+      
+      const questions = await OnboardingService.getActiveQuestions(type);
       
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({

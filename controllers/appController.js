@@ -59,7 +59,52 @@ async function getProgress(req, res) {
   }
 }
 
+async function getSettings(req, res) {
+  try {
+    // Validate authentication
+    if (!req.user || !req.user.userId) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: false,
+        message: 'Unauthorized. Invalid or missing authentication token.',
+        data: null
+      }));
+      return;
+    }
+
+    const settingsData = await AppFormatService.getSettingsData(req.user.userId);
+    
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      message: null,
+      data: settingsData
+    }));
+  } catch (error) {
+    console.error('Error fetching settings data:', error);
+    
+    // Handle specific error cases
+    if (error.message === 'User not found') {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        success: false,
+        message: 'User not found.',
+        data: null
+      }));
+      return;
+    }
+
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      success: false,
+      message: 'Internal server error. Please try again later.',
+      data: null
+    }));
+  }
+}
+
 module.exports = { 
   getAppCalendar,
-  getProgress
+  getProgress,
+  getSettings
 }; 

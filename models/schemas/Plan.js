@@ -66,8 +66,8 @@ const planSchema = new mongoose.Schema({
 // external_plan_id already has unique index from schema definition
 planSchema.index({ isActive: 1 });
 planSchema.index({ createdAt: -1 });
-planSchema.index({ googleplay_product_id: 1 }, { sparse: true });
-planSchema.index({ appstore_product_id: 1 }, { sparse: true });
 planSchema.index({ platform: 1 });
+// Note: googleplay_product_id and appstore_product_id don't need explicit indexes
+// unless they need to be unique or queried frequently
 
 module.exports = mongoose.model('Plan', planSchema, 'plans');

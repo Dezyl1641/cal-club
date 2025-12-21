@@ -1,5 +1,9 @@
 const MealService = require('./mealService');
 const { findUserById } = require('../models/user');
+const User = require('../models/schemas/User');
+const Question = require('../models/schemas/Question');
+const UserQuestion = require('../models/schemas/UserQuestion');
+const Membership = require('../models/schemas/Membership');
 
 // Interfaces for type consistency
 const AppBarData = {
@@ -572,6 +576,309 @@ class AppFormatService {
     } catch (error) {
       throw new Error(`Failed to fetch progress data: ${error.message}`);
     }
+  }
+
+  /**
+   * Get settings data for authenticated user
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} Settings data object
+   */
+  static async getSettingsData(userId) {
+    try {
+      // Fetch user data
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Build header data
+      const header = {
+        name: user.name || null,
+        phoneNumber: user.phone || null,
+        avatarUrl: null, // Not stored in User schema currently
+        email: user.email || null
+      };
+
+      // Check onboarding completion
+      const isOnboardingComplete = await this.checkOnboardingCompletion(userId);
+
+      // Check Apple Health connection
+      const appleHealthStatus = await this.checkAppleHealthConnection(userId);
+
+      // Check active membership
+      const hasActiveMembership = await this.checkActiveMembership(userId);
+
+      // Build menu items
+      const menuItems = this.buildMenuItems({
+        isOnboardingComplete,
+        appleHealthStatus,
+        hasActiveMembership
+      });
+
+      // Build footer data
+      const footerData = this.buildSettingsFooterData();
+
+      return {
+        header,
+        menuItems,
+        footerData
+      };
+    } catch (error) {
+      console.error('Error building settings data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user has completed onboarding
+   * @param {string} userId - User ID
+   * @returns {Promise<boolean>} True if onboarding is complete
+   */
+  static async checkOnboardingCompletion(userId) {
+    try {
+      // Get all active questions
+      const activeQuestions = await Question.find({ isActive: true })
+        .select('_id')
+        .lean();
+
+      if (activeQuestions.length === 0) {
+        // No active questions means onboarding is "complete" by default
+        return true;
+      }
+
+      const activeQuestionIds = activeQuestions.map(q => q._id);
+
+      // Get user's answered questions (not deleted)
+      const answeredQuestions = await UserQuestion.find({
+        userId,
+        questionId: { $in: activeQuestionIds },
+        deletedAt: null
+      })
+        .select('questionId')
+        .lean();
+
+      const answeredQuestionIds = new Set(
+        answeredQuestions.map(aq => aq.questionId.toString())
+      );
+
+      // Check if all active questions are answered
+      const allAnswered = activeQuestionIds.every(qId =>
+        answeredQuestionIds.has(qId.toString())
+      );
+
+      return allAnswered;
+    } catch (error) {
+      console.error('Error checking onboarding completion:', error);
+      // Default to incomplete on error
+      return false;
+    }
+  }
+
+  /**
+   * Check Apple Health connection status
+   * @param {string} userId - User ID
+   * @returns {Promise<Object>} { connected: boolean, subtitle: string | null }
+   */
+  static async checkAppleHealthConnection(userId) {
+    try {
+      // Find question with type "APPLE_HEALTH" (may be legacy type)
+      const appleHealthQuestion = await Question.findOne({
+        $or: [
+          { type: 'APPLE_HEALTH' },
+          { text: { $regex: /apple.*health/i } }
+        ],
+        isActive: true
+      }).lean();
+
+      if (!appleHealthQuestion) {
+        // No Apple Health question found, assume not connected
+        return { connected: false, subtitle: null };
+      }
+
+      // Check if user has answered the Apple Health question
+      const userAnswer = await UserQuestion.findOne({
+        userId,
+        questionId: appleHealthQuestion._id,
+        deletedAt: null
+      }).lean();
+
+      const connected = !!userAnswer;
+      const subtitle = connected ? 'Connected - Tap to refresh' : null;
+
+      return { connected, subtitle };
+    } catch (error) {
+      console.error('Error checking Apple Health connection:', error);
+      return { connected: false, subtitle: null };
+    }
+  }
+
+  /**
+   * Check if user has active membership
+   * @param {string} userId - User ID
+   * @returns {Promise<boolean>} True if user has active membership
+   */
+  static async checkActiveMembership(userId) {
+    try {
+      const now = new Date();
+      
+      const activeMembership = await Membership.findOne({
+        userId,
+        end: { $gt: now },
+        status: { $in: ['purchased', 'active'] }
+      }).lean();
+
+      return !!activeMembership;
+    } catch (error) {
+      console.error('Error checking active membership:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Build menu items array for settings screen
+   * @param {Object} context - Context data
+   * @param {boolean} context.isOnboardingComplete - Whether onboarding is complete
+   * @param {Object} context.appleHealthStatus - Apple Health status
+   * @param {boolean} context.hasActiveMembership - Whether user has active membership
+   * @returns {Array} Menu items array
+   */
+  static buildMenuItems({ isOnboardingComplete, appleHealthStatus, hasActiveMembership }) {
+    const menuItems = [];
+
+    // Onboarding item (only if incomplete)
+    if (!isOnboardingComplete) {
+      menuItems.push({
+        id: 'onboarding',
+        icon: 'quiz',
+        title: 'Complete Onboarding',
+        action: 'navigate_onboarding',
+        url: null,
+        type: 'navigation',
+        color: null,
+        showDivider: false,
+        subtitle: null
+      });
+    }
+
+    // Progress item (always shown)
+    menuItems.push({
+      id: 'progress',
+      icon: 'trending_up',
+      title: 'Progress',
+      action: 'navigate_progress',
+      url: null,
+      type: 'navigation',
+      color: null,
+      showDivider: false,
+      subtitle: null
+    });
+
+    // Privacy Policy
+    menuItems.push({
+      id: 'privacy',
+      icon: 'privacy_tip',
+      title: 'Privacy Policy',
+      action: 'open_url',
+      url: 'https://calclub.com/privacy-policy',
+      type: 'external_link',
+      color: null,
+      showDivider: false,
+      subtitle: null
+    });
+
+    // Terms of Service
+    menuItems.push({
+      id: 'terms',
+      icon: 'description',
+      title: 'Terms of Service',
+      action: 'open_url',
+      url: 'https://calclub.com/terms-of-service',
+      type: 'external_link',
+      color: null,
+      showDivider: false,
+      subtitle: null
+    });
+
+    // Apple Health
+    menuItems.push({
+      id: 'health',
+      icon: 'health_and_safety',
+      title: 'Apple Health',
+      action: 'apple_health',
+      url: null,
+      type: 'action',
+      color: null,
+      showDivider: false,
+      subtitle: appleHealthStatus.subtitle
+    });
+
+    // Subscriptions (with divider before it)
+    menuItems.push({
+      id: 'subscriptions',
+      icon: 'subscriptions',
+      title: 'Subscriptions',
+      action: 'navigate_subscriptions',
+      url: null,
+      type: 'navigation',
+      color: 'blue',
+      showDivider: true,
+      subtitle: null
+    });
+
+    // Delete Account (with divider before it)
+    menuItems.push({
+      id: 'delete_account',
+      icon: 'delete_forever',
+      title: 'Delete Account',
+      action: 'delete_account',
+      url: null,
+      type: 'action',
+      color: 'red',
+      showDivider: true,
+      subtitle: null
+    });
+
+    // Logout (no divider)
+    menuItems.push({
+      id: 'logout',
+      icon: 'logout',
+      title: 'Logout',
+      action: 'logout',
+      url: null,
+      type: 'action',
+      color: 'red',
+      showDivider: false,
+      subtitle: null
+    });
+
+    return menuItems;
+  }
+
+  /**
+   * Build footer data array for settings screen
+   * @returns {Array} Footer data array
+   */
+  static buildSettingsFooterData() {
+    return [
+      {
+        active: false,
+        icon: 'home',
+        title: 'Home',
+        action: 'navigate_home'
+      },
+      {
+        active: false,
+        icon: 'progress',
+        title: 'Progress',
+        action: 'navigate_progress'
+      },
+      {
+        active: true,
+        icon: 'settings',
+        title: 'Settings',
+        action: 'navigate_settings'
+      }
+    ];
   }
 }
 

@@ -151,8 +151,23 @@ class OnboardingService {
     }
   }
 
-  static async getActiveQuestions() {
+  static async getActiveQuestions(type = null) {
     try {
+      // If type is "NOTIFICATIONS", return only the meal timing question
+      if (type === 'NOTIFICATIONS') {
+        const notificationQuestionId = new mongoose.Types.ObjectId('6908fe66896ccf24778c9087');
+        
+        const question = await Question.findOne({
+          _id: notificationQuestionId,
+          isActive: true
+        })
+          .select('_id text subtext type options sequence image')
+          .lean();
+        
+        return question ? [question] : [];
+      }
+      
+      // Default behavior: return all active questions
       return await Question.find({ isActive: true })
         .sort({ sequence: 1 })
         .select('_id text subtext type options sequence image');
