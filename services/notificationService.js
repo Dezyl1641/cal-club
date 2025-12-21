@@ -70,7 +70,6 @@ class NotificationService {
       };
 
       const response = await messaging.send(message);
-      console.log('Successfully sent notification:', response);
       return { success: true, messageId: response };
     } catch (error) {
       console.error('Error sending notification:', error);

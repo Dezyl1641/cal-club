@@ -215,7 +215,10 @@ Return only valid JSON, no additional text.`;
   }
 
   static async analyzeFoodWithGemini(imageUrl, hint) {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    // Use gemini-2.5-flash as requested
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [GEMINI] Using model: ${modelName}`);
+    const model = genAI.getGenerativeModel({ model: modelName });
     
     // Build prompt based on what's available
     let prompt = '';
@@ -380,15 +383,32 @@ Return only valid JSON, no additional text.`;
       parts.push({ text: prompt });
     }
     
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: parts
-        }
-      ]
-    });
-    return result.response.text();
+    try {
+      console.log(`🤖 [GEMINI] Sending request with ${parts.length} parts`);
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: parts
+          }
+        ]
+      });
+      
+      const responseText = result.response.text();
+      console.log(`🤖 [GEMINI] Response received, length: ${responseText?.length || 0}`);
+      console.log(`🤖 [GEMINI] Raw response preview: ${responseText?.substring(0, 200)}...`);
+      
+      if (!responseText || responseText.trim() === '') {
+        console.error('❌ [GEMINI] Empty response received');
+        throw new Error('Empty response from Gemini API');
+      }
+      
+      return responseText;
+    } catch (error) {
+      console.error('❌ [GEMINI] API Error:', error.message);
+      console.error('❌ [GEMINI] Full error:', error);
+      throw error;
+    }
   }
 
   static async analyzeFoodItemWithOpenAI(itemName, currentMealName, previousItemName, originalUnit) {
@@ -453,7 +473,7 @@ Return only valid JSON, no additional text.`
       
       if (provider === 'gemini') {
         result = await this.analyzeFoodWithGemini(imageUrl, hint);
-        llmModel = 'gemini-1.5-flash';
+        llmModel = 'gemini-2.5-flash';
       } else {
         result = await this.analyzeFoodWithOpenAI(imageUrl, hint);
         llmModel = 'gpt-4o';
@@ -554,8 +574,18 @@ Return only valid JSON, no additional text.`
 
   static parseAIResult(aiResult) {
     try {
+      // Clean markdown code blocks if present
+      let cleanResult = aiResult;
+      if (aiResult.includes('```json')) {
+        cleanResult = aiResult.split('```json')[1].split('```')[0].trim();
+      } else if (aiResult.includes('```')) {
+        cleanResult = aiResult.split('```')[1].split('```')[0].trim();
+      }
+      
+      console.log('🤖 [AI] Cleaned AI result for parsing:', cleanResult.substring(0, 100) + '...');
+      
       // Try to parse as JSON first
-      const parsed = JSON.parse(aiResult);
+      const parsed = JSON.parse(cleanResult);
       
       // Validate required fields
       if (!parsed.mealName || !parsed.items || !Array.isArray(parsed.items)) {

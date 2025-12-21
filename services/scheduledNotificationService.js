@@ -40,16 +40,11 @@ function getCurrentTimeIST() {
  * @param {string} time - Time in HH:MM format
  */
 async function processMealReminders(time) {
-  console.log(`\n🔔 [CRON] Processing meal reminders for time: ${time}`);
-  
   try {
     // Get all active preferences for this time
     const preferences = await getActivePreferencesByTime(time);
     
-    console.log(`📱 [CRON] Found ${preferences.length} preferences for time ${time}`);
-    
     if (preferences.length === 0) {
-      console.log(`📱 [CRON] No active preferences for ${time}`);
       return;
     }
 
@@ -58,13 +53,8 @@ async function processMealReminders(time) {
       try {
         const message = REMINDER_MESSAGES[pref.type];
         if (!message) {
-          console.log(`⚠️ [CRON] Unknown type: ${pref.type}`);
           continue;
         }
-
-        console.log(`📱 [CRON] Sending ${pref.type} reminder to user: ${pref.userId}`);
-        console.log(`   Title: ${message.title}`);
-        console.log(`   Body: ${message.body}`);
 
         const result = await NotificationService.sendToUser(
           pref.userId._id || pref.userId,
@@ -78,16 +68,12 @@ async function processMealReminders(time) {
         );
 
         if (result.sentCount > 0) {
-          console.log(`✅ [CRON] Successfully sent ${pref.type} reminder to user ${pref.userId} (${result.sentCount} devices)`);
-        } else {
-          console.log(`⚠️ [CRON] No devices found for user ${pref.userId} - ${result.message}`);
+          console.log(`✅ [CRON] Successfully sent ${pref.type} reminder to user ${pref.userId} (${result.sentCount} devices) at ${time}`);
         }
       } catch (error) {
         console.error(`❌ [CRON] Error sending reminder to user ${pref.userId}:`, error.message);
       }
     }
-
-    console.log(`🔔 [CRON] Finished processing reminders for ${time}\n`);
   } catch (error) {
     console.error(`❌ [CRON] Error processing meal reminders for ${time}:`, error);
   }
@@ -103,16 +89,13 @@ function initializeMealReminderCron() {
   // Run every minute
   const job = cron.schedule('* * * * *', async () => {
     const currentTime = getCurrentTimeIST();
-    console.log(`⏰ [CRON] Cron tick at IST: ${currentTime}`);
-    
     await processMealReminders(currentTime);
   }, {
     scheduled: true,
     timezone: 'Asia/Kolkata'
   });
 
-  console.log('✅ [CRON] Meal reminder cron job initialized (runs every minute)');
-  console.log('📍 [CRON] Timezone: Asia/Kolkata (IST)');
+  console.log('✅ [CRON] Meal reminder cron job initialized');
   
   return job;
 }
