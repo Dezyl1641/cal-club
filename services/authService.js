@@ -13,9 +13,17 @@ const parseBody = require('../utils/parseBody');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Twilio Configuration
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+
+// Fast2SMS Configuration
+const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY;
+const FAST2SMS_SENDER_ID = process.env.FAST2SMS_SENDER_ID;
+const FAST2SMS_MESSAGE_ID = process.env.FAST2SMS_MESSAGE_ID;
+const FAST2SMS_ENTITY_ID = process.env.FAST2SMS_ENTITY_ID;
+const FAST2SMS_DLT_TEMPLATE_ID = process.env.FAST2SMS_DLT_TEMPLATE_ID;
 
 // Initialize Twilio client only if credentials are available
 let twilioClient = null;
@@ -24,6 +32,13 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
   twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 }
 
+// SMS Provider Types
+const SMS_PROVIDERS = {
+  TWILIO: 'twilio',
+  FAST2SMS_QUICK: 'fast2sms-quicksms',
+  FAST2SMS_DLT: 'fast2sms-dlt'
+};
+
 class AuthService {
   static generateOtp(phone) {
     // Extract last 6 digits from phone number
@@ -31,7 +46,22 @@ class AuthService {
     return cleanPhone.slice(-6); // Get last 6 digits
   }
 
-  static async sendOtpViaSms(phone, otp) {
+  /**
+   * Format phone number to 10 digits (for Fast2SMS - India only)
+   * @param {string} phone - Phone number with or without country code
+   * @returns {string} 10-digit phone number
+   */
+  static formatPhoneForFast2SMS(phone) {
+    // Remove all non-digits
+    const cleanPhone = phone.replace(/\D/g, '');
+    // Return last 10 digits (removes country code if present)
+    return cleanPhone.slice(-10);
+  }
+
+  /**
+   * Send OTP via Twilio
+   */
+  static async sendOtpViaTwilio(phone, otp) {
     if (!twilioClient) {
       throw new Error('Twilio is not configured. Please set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN environment variables.');
     }
@@ -46,15 +76,145 @@ class AuthService {
         from: TWILIO_PHONE_NUMBER,
         to: phone
       });
-      console.log(`OTP sent via Twilio. SID: ${message.sid}`);
-      return message;
+      console.log(`✅ OTP sent via Twilio. SID: ${message.sid}`);
+      return { provider: 'twilio', messageId: message.sid };
     } catch (error) {
-      console.error('Twilio SMS error:', error.message);
+      console.error('❌ Twilio SMS error:', error.message);
       throw new Error(`Failed to send SMS via Twilio: ${error.message}`);
     }
   }
 
-  static async requestOtp(phone) {
+  /**
+   * Send OTP via Fast2SMS Quick SMS API
+   * API Docs: https://docs.fast2sms.com/reference/authorization
+   */
+  static async sendOtpViaFast2SMSQuick(phone, otp) {
+    if (!FAST2SMS_API_KEY) {
+      throw new Error('Fast2SMS is not configured. Please set FAST2SMS_API_KEY environment variable.');
+    }
+
+    const formattedPhone = this.formatPhoneForFast2SMS(phone);
+    const message = `Your OTP is ${otp}. Valid for 15 minutes. Do not share with anyone.`;
+
+    try {
+      const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          'authorization': FAST2SMS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          route: 'q', // Quick SMS route
+          message: message,
+          language: 'english',
+          flash: 0,
+          numbers: formattedPhone
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || data.return === false) {
+        console.error('❌ Fast2SMS Quick SMS error:', data);
+        throw new Error(data.message || 'Failed to send SMS via Fast2SMS');
+      }
+
+      console.log(`✅ OTP sent via Fast2SMS Quick SMS. Request ID: ${data.request_id}`);
+      return { provider: 'fast2sms-quicksms', requestId: data.request_id };
+    } catch (error) {
+      console.error('❌ Fast2SMS Quick SMS error:', error.message);
+      throw new Error(`Failed to send SMS via Fast2SMS Quick: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send OTP via Fast2SMS DLT SMS API
+   * Requires DLT registration with TRAI for India
+   * API Docs: https://docs.fast2sms.com/reference/authorization
+   */
+  static async sendOtpViaFast2SMSDLT(phone, otp) {
+    if (!FAST2SMS_API_KEY) {
+      throw new Error('Fast2SMS is not configured. Please set FAST2SMS_API_KEY environment variable.');
+    }
+
+    if (!FAST2SMS_SENDER_ID || !FAST2SMS_DLT_TEMPLATE_ID) {
+      throw new Error('Fast2SMS DLT is not fully configured. Please set FAST2SMS_SENDER_ID and FAST2SMS_DLT_TEMPLATE_ID environment variables.');
+    }
+
+    const formattedPhone = this.formatPhoneForFast2SMS(phone);
+    
+    // DLT template message - must match your registered DLT template exactly
+    // Example template: "Your OTP is {#var#}. Valid for 15 minutes. Do not share with anyone. - CalClub"
+    const message = `Your OTP is ${otp}. Valid for 15 minutes. Do not share with anyone. - CalClub`;
+
+    try {
+      const requestBody = {
+        route: 'dlt',
+        sender_id: FAST2SMS_SENDER_ID,
+        message: FAST2SMS_MESSAGE_ID, // Message ID from DLT registration
+        variables_values: otp, // Variable to substitute in template
+        flash: 0,
+        numbers: formattedPhone
+      };
+
+      // Add entity ID if provided
+      if (FAST2SMS_ENTITY_ID) {
+        requestBody.entity_id = FAST2SMS_ENTITY_ID;
+      }
+
+      const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          'authorization': FAST2SMS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || data.return === false) {
+        console.error('❌ Fast2SMS DLT SMS error:', data);
+        throw new Error(data.message || 'Failed to send DLT SMS via Fast2SMS');
+      }
+
+      console.log(`✅ OTP sent via Fast2SMS DLT SMS. Request ID: ${data.request_id}`);
+      return { provider: 'fast2sms-dlt', requestId: data.request_id };
+    } catch (error) {
+      console.error('❌ Fast2SMS DLT SMS error:', error.message);
+      throw new Error(`Failed to send SMS via Fast2SMS DLT: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send OTP via SMS using specified provider
+   * @param {string} phone - Phone number
+   * @param {string} otp - OTP to send
+   * @param {string} provider - SMS provider: 'twilio', 'fast2sms-quicksms', 'fast2sms-dlt'
+   */
+  static async sendOtpViaSms(phone, otp, provider = SMS_PROVIDERS.FAST2SMS_QUICK) {
+    console.log(`📱 Sending OTP via provider: ${provider}`);
+    
+    switch (provider) {
+      case SMS_PROVIDERS.TWILIO:
+        return await this.sendOtpViaTwilio(phone, otp);
+      
+      case SMS_PROVIDERS.FAST2SMS_DLT:
+        return await this.sendOtpViaFast2SMSDLT(phone, otp);
+      
+      case SMS_PROVIDERS.FAST2SMS_QUICK:
+      default:
+        // Default to Fast2SMS Quick SMS
+        return await this.sendOtpViaFast2SMSQuick(phone, otp);
+    }
+  }
+
+  /**
+   * Request OTP with specified SMS provider
+   * @param {string} phone - Phone number
+   * @param {string} provider - SMS provider (default: 'fast2sms-quicksms')
+   */
+  static async requestOtp(phone, provider = SMS_PROVIDERS.FAST2SMS_QUICK) {
     const otp = this.generateOtp(phone);
     
     // Check if user exists to link OTP
@@ -64,10 +224,15 @@ class AuthService {
     // Store OTP
     await storeOtp(phone, otp, userId);
     
-    // Send SMS
-    await this.sendOtpViaSms(phone, otp);
+    // Send SMS via specified provider
+    const smsResult = await this.sendOtpViaSms(phone, otp, provider);
 
-    return { message: 'OTP sent via sms and stored', phone, otp };
+    return { 
+      message: 'OTP sent via SMS and stored', 
+      phone, 
+      otp,
+      provider: smsResult.provider
+    };
   }
 
   static async verifyOtp(phone, otp) {

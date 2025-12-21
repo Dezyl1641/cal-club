@@ -10,7 +10,11 @@ function requestOtp(req, res) {
     }
 
     try {
-      const result = await AuthService.requestOtp(data.phone);
+      // Extract provider from request body (default: fast2sms-quicksms)
+      // Supported providers: 'twilio', 'fast2sms-quicksms', 'fast2sms-dlt'
+      const provider = data.provider || 'fast2sms-quicksms';
+      
+      const result = await AuthService.requestOtp(data.phone, provider);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     } catch (error) {
