@@ -10,9 +10,9 @@ function requestOtp(req, res) {
     }
 
     try {
-      // Extract provider from request body (default: fast2sms-quicksms)
-      // Supported providers: 'twilio', 'fast2sms-quicksms', 'fast2sms-dlt'
-      const provider = data.provider || 'fast2sms-quicksms';
+      // Extract provider from request body (default: fast2sms-otp)
+      // Supported providers: 'twilio', 'fast2sms-otp', 'fast2sms-quicksms', 'fast2sms-dlt'
+      const provider = data.provider || 'fast2sms-otp';
       
       const result = await AuthService.requestOtp(data.phone, provider);
       res.writeHead(200, { 'Content-Type': 'application/json' });

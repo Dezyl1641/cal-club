@@ -36,6 +36,7 @@ if (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN) {
 const SMS_PROVIDERS = {
   TWILIO: 'twilio',
   FAST2SMS_QUICK: 'fast2sms-quicksms',
+  FAST2SMS_OTP: 'fast2sms-otp',        // Fast2SMS OTP-specific route
   FAST2SMS_DLT: 'fast2sms-dlt'
 };
 
@@ -85,8 +86,9 @@ class AuthService {
   }
 
   /**
-   * Send OTP via Fast2SMS Quick SMS API
-   * API Docs: https://docs.fast2sms.com/reference/authorization
+   * Send OTP via Fast2SMS Quick SMS API (route: 'q')
+   * No DLT registration needed, but higher cost (~₹5 per SMS)
+   * API Docs: https://docs.fast2sms.com/reference/quick-sms
    */
   static async sendOtpViaFast2SMSQuick(phone, otp) {
     if (!FAST2SMS_API_KEY) {
@@ -124,6 +126,51 @@ class AuthService {
     } catch (error) {
       console.error('❌ Fast2SMS Quick SMS error:', error.message);
       throw new Error(`Failed to send SMS via Fast2SMS Quick: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send OTP via Fast2SMS OTP API (route: 'otp')
+   * Optimized specifically for OTP messages
+   * Lower cost than Quick SMS, no DLT registration needed
+   * API Docs: https://docs.fast2sms.com/reference/quick-sms
+   */
+  static async sendOtpViaFast2SMSOTP(phone, otp) {
+    if (!FAST2SMS_API_KEY) {
+      throw new Error('Fast2SMS is not configured. Please set FAST2SMS_API_KEY environment variable.');
+    }
+
+    const formattedPhone = this.formatPhoneForFast2SMS(phone);
+    const message = `Your OTP is ${otp}. Valid for 15 minutes. Do not share with anyone.`;
+
+    try {
+      const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          'authorization': FAST2SMS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          route: 'otp', // OTP-specific route (optimized for OTP messages)
+          message: message,
+          language: 'english',
+          flash: 0,
+          numbers: formattedPhone
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || data.return === false) {
+        console.error('❌ Fast2SMS OTP API error:', data);
+        throw new Error(data.message || 'Failed to send OTP via Fast2SMS');
+      }
+
+      console.log(`✅ OTP sent via Fast2SMS OTP API. Request ID: ${data.request_id}`);
+      return { provider: 'fast2sms-otp', requestId: data.request_id };
+    } catch (error) {
+      console.error('❌ Fast2SMS OTP API error:', error.message);
+      throw new Error(`Failed to send OTP via Fast2SMS: ${error.message}`);
     }
   }
 
@@ -190,9 +237,9 @@ class AuthService {
    * Send OTP via SMS using specified provider
    * @param {string} phone - Phone number
    * @param {string} otp - OTP to send
-   * @param {string} provider - SMS provider: 'twilio', 'fast2sms-quicksms', 'fast2sms-dlt'
+   * @param {string} provider - SMS provider: 'twilio', 'fast2sms-otp', 'fast2sms-quicksms', 'fast2sms-dlt'
    */
-  static async sendOtpViaSms(phone, otp, provider = SMS_PROVIDERS.FAST2SMS_QUICK) {
+  static async sendOtpViaSms(phone, otp, provider = SMS_PROVIDERS.FAST2SMS_OTP) {
     console.log(`📱 Sending OTP via provider: ${provider}`);
     
     switch (provider) {
@@ -203,18 +250,21 @@ class AuthService {
         return await this.sendOtpViaFast2SMSDLT(phone, otp);
       
       case SMS_PROVIDERS.FAST2SMS_QUICK:
-      default:
-        // Default to Fast2SMS Quick SMS
         return await this.sendOtpViaFast2SMSQuick(phone, otp);
+      
+      case SMS_PROVIDERS.FAST2SMS_OTP:
+      default:
+        // Default to Fast2SMS OTP API (optimized for OTP messages)
+        return await this.sendOtpViaFast2SMSOTP(phone, otp);
     }
   }
 
   /**
    * Request OTP with specified SMS provider
    * @param {string} phone - Phone number
-   * @param {string} provider - SMS provider (default: 'fast2sms-quicksms')
+   * @param {string} provider - SMS provider (default: 'fast2sms-otp')
    */
-  static async requestOtp(phone, provider = SMS_PROVIDERS.FAST2SMS_QUICK) {
+  static async requestOtp(phone, provider = SMS_PROVIDERS.FAST2SMS_OTP) {
     const otp = this.generateOtp(phone);
     
     // Check if user exists to link OTP
