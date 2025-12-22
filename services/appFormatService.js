@@ -308,12 +308,12 @@ class AppFormatService {
         "title": "Progress",
         "action": "navigate_progress"
       },
-      // {
-      //     "active": false,
-      //     "icon": "settings",
-      //     "title": "Settings",
-      //     "action": "navigate_settings"
-      // }
+      {
+          "active": false,
+          "icon": "settings",
+          "title": "Settings",
+          "action": "navigate_settings"
+      }
     ];
   }
 
@@ -552,12 +552,12 @@ class AppFormatService {
           title: 'Progress',
           action: 'navigate_progress'
         },
-        // {
-        //   active: false,
-        //   icon: 'settings',
-        //   title: 'Settings',
-        //   action: 'navigate_settings'
-        // }
+        {
+          active: false,
+          icon: 'settings',
+          title: 'Settings',
+          action: 'navigate_settings'
+        }
       ];
 
       return {
