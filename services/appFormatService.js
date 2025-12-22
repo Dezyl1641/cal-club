@@ -602,17 +602,9 @@ class AppFormatService {
       // Check onboarding completion
       const isOnboardingComplete = await this.checkOnboardingCompletion(userId);
 
-      // Check Apple Health connection
-      const appleHealthStatus = await this.checkAppleHealthConnection(userId);
-
-      // Check active membership
-      const hasActiveMembership = await this.checkActiveMembership(userId);
-
       // Build menu items
       const menuItems = this.buildMenuItems({
-        isOnboardingComplete,
-        appleHealthStatus,
-        hasActiveMembership
+        isOnboardingComplete
       });
 
       // Build footer data
@@ -675,74 +667,12 @@ class AppFormatService {
   }
 
   /**
-   * Check Apple Health connection status
-   * @param {string} userId - User ID
-   * @returns {Promise<Object>} { connected: boolean, subtitle: string | null }
-   */
-  static async checkAppleHealthConnection(userId) {
-    try {
-      // Find question with type "APPLE_HEALTH" (may be legacy type)
-      const appleHealthQuestion = await Question.findOne({
-        $or: [
-          { type: 'APPLE_HEALTH' },
-          { text: { $regex: /apple.*health/i } }
-        ],
-        isActive: true
-      }).lean();
-
-      if (!appleHealthQuestion) {
-        // No Apple Health question found, assume not connected
-        return { connected: false, subtitle: null };
-      }
-
-      // Check if user has answered the Apple Health question
-      const userAnswer = await UserQuestion.findOne({
-        userId,
-        questionId: appleHealthQuestion._id,
-        deletedAt: null
-      }).lean();
-
-      const connected = !!userAnswer;
-      const subtitle = connected ? 'Connected - Tap to refresh' : null;
-
-      return { connected, subtitle };
-    } catch (error) {
-      console.error('Error checking Apple Health connection:', error);
-      return { connected: false, subtitle: null };
-    }
-  }
-
-  /**
-   * Check if user has active membership
-   * @param {string} userId - User ID
-   * @returns {Promise<boolean>} True if user has active membership
-   */
-  static async checkActiveMembership(userId) {
-    try {
-      const now = new Date();
-      
-      const activeMembership = await Membership.findOne({
-        userId,
-        end: { $gt: now },
-        status: { $in: ['purchased', 'active'] }
-      }).lean();
-
-      return !!activeMembership;
-    } catch (error) {
-      console.error('Error checking active membership:', error);
-      return false;
-    }
-  }
-
-  /**
    * Build menu items array for settings screen
    * @param {Object} context - Context data
    * @param {boolean} context.isOnboardingComplete - Whether onboarding is complete
-   * @param {Object} context.appleHealthStatus - Apple Health status
-   * @param {boolean} context.hasActiveMembership - Whether user has active membership
    * @returns {Array} Menu items array
    */
-  static buildMenuItems({ isOnboardingComplete, appleHealthStatus, hasActiveMembership }) {
+  static buildMenuItems({ isOnboardingComplete }) {
     const menuItems = [];
 
     // Onboarding item (only if incomplete)
@@ -760,12 +690,38 @@ class AppFormatService {
       });
     }
 
-    // Progress item (always shown)
+    // Progress item
     menuItems.push({
       id: 'progress',
       icon: 'trending_up',
       title: 'Progress',
       action: 'navigate_progress',
+      url: null,
+      type: 'navigation',
+      color: null,
+      showDivider: false,
+      subtitle: null
+    });
+
+    // Goal Settings
+    menuItems.push({
+      id: 'goal_settings',
+      icon: 'target',
+      title: 'Goal Settings',
+      action: 'navigate_goal_settings',
+      url: null,
+      type: 'navigation',
+      color: null,
+      showDivider: false,
+      subtitle: null
+    });
+
+    // Meal Reminders
+    menuItems.push({
+      id: 'meal_reminders',
+      icon: 'notifications',
+      title: 'Meal Reminders',
+      action: 'navigate_meal_reminders',
       url: null,
       type: 'navigation',
       color: null,
@@ -796,32 +752,6 @@ class AppFormatService {
       type: 'external_link',
       color: null,
       showDivider: false,
-      subtitle: null
-    });
-
-    // Apple Health
-    menuItems.push({
-      id: 'health',
-      icon: 'health_and_safety',
-      title: 'Apple Health',
-      action: 'apple_health',
-      url: null,
-      type: 'action',
-      color: null,
-      showDivider: false,
-      subtitle: appleHealthStatus.subtitle
-    });
-
-    // Subscriptions (with divider before it)
-    menuItems.push({
-      id: 'subscriptions',
-      icon: 'subscriptions',
-      title: 'Subscriptions',
-      action: 'navigate_subscriptions',
-      url: null,
-      type: 'navigation',
-      color: 'blue',
-      showDivider: true,
       subtitle: null
     });
 
