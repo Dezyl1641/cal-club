@@ -166,6 +166,56 @@ class OnboardingService {
         
         return question ? [question] : [];
       }
+
+      // If type is "PLAN_CREATION", return only questions needed for plan creation
+      if (type === 'PLAN_CREATION') {
+        // Question IDs for plan creation data:
+        // sex_at_birth: Choose your gender
+        // age_years: What's your date of birth?
+        // height_cm, weight_kg: What's your height and weight?
+        // goal_type: What is your goal?
+        // pace_kg_per_week: How fast do you want to reach your goal?
+        // activity_level: What's your typical day like?
+        // workouts_per_week: How many workouts do you do per week?
+        // desired_weight_kg: What's your target weight (kg)?
+        const planCreationQuestionIds = [
+          '6908fe66896ccf24778c9075', // Choose your gender (sequence 4)
+          '6908fe66896ccf24778c9076', // How many workouts do you do per week? (sequence 5)
+          '6908fe66896ccf24778c9077', // What's your typical day like? (sequence 6)
+          '6908fe66896ccf24778c9079', // What's your height and weight? (sequence 8)
+          '6908fe66896ccf24778c907a', // What's your date of birth? (sequence 9)
+          '6908fe66896ccf24778c907d', // What is your goal? (sequence 12)
+          '6908fe66896ccf24778c907f', // What's your target weight (kg)? (sequence 14)
+          '6908fe66896ccf24778c9082', // How fast do you want to reach your goal? (sequence 17)
+        ].map(id => new mongoose.Types.ObjectId(id));
+
+        // End questions (always last, in this order)
+        const endQuestionIds = [
+          '6908fe66896ccf24778c9085', // Time to generate your custom plan! (GOAL_CALCULATION)
+          '6908fe66896ccf24778c9086', // Congratulations your custom plan is ready! (PLAN_SUMMARY)
+        ].map(id => new mongoose.Types.ObjectId(id));
+
+        // Fetch plan creation questions sorted by sequence
+        const planQuestions = await Question.find({
+          _id: { $in: planCreationQuestionIds },
+          isActive: true
+        })
+          .sort({ sequence: 1 })
+          .select('_id text subtext type options sequence image')
+          .lean();
+
+        // Fetch end questions
+        const endQuestions = await Question.find({
+          _id: { $in: endQuestionIds },
+          isActive: true
+        })
+          .sort({ sequence: 1 })
+          .select('_id text subtext type options sequence image')
+          .lean();
+
+        // Combine: plan questions first, then end questions
+        return [...planQuestions, ...endQuestions];
+      }
       
       // Default behavior: return all active questions
       return await Question.find({ isActive: true })
