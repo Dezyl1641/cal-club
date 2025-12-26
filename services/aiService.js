@@ -474,8 +474,8 @@ Return only valid JSON, no additional text.`
     const prompt = `A user is updating a meal item. Please provide nutrition information for the new item and suggest an updated meal name.
 
 Current meal name: "${currentMealName}"
-Previous item name: "${previousItemName}"
-New item name: "${itemName}"
+Previous item name (that is being replaced): "${previousItemName}"
+New item name (that is being added): "${itemName}"
 Original quantity unit: "${originalUnit}"
 
 Return JSON with this structure:
@@ -491,7 +491,7 @@ Return JSON with this structure:
     "carbs": 20,
     "fat": 5
   },
-  "updatedMealName": "Updated meal name reflecting the change"
+  "updatedMealName": "Updated meal name reflecting the change, remove the previous item name and add the new item name appropriately (if needed)"
 }
 
 Guidelines:
