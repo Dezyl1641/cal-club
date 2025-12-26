@@ -330,8 +330,8 @@ async function getNutritionForItem(newItemName, currentMealName, previousItemNam
   const AiService = require('../services/aiService');
 
   try {
-    // Use OpenAI for this analysis
-    const result = await AiService.analyzeFoodItemWithOpenAI(newItemName, currentMealName, previousItemName, originalUnit);
+    // Use AI service (defaults to Gemini)
+    const result = await AiService.analyzeFoodItem(newItemName, currentMealName, previousItemName, originalUnit);
     const parsedResult = JSON.parse(result);
     console.log('parsedResult', JSON.stringify(parsedResult));
     return {

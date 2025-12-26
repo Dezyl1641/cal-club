@@ -466,6 +466,92 @@ Return only valid JSON, no additional text.`
     return completion.choices[0].message.content;
   }
 
+  static async analyzeFoodItemWithGemini(itemName, currentMealName, previousItemName, originalUnit) {
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [GEMINI] Using model: ${modelName} for item analysis`);
+    const model = genAI.getGenerativeModel({ model: modelName });
+    
+    const prompt = `A user is updating a meal item. Please provide nutrition information for the new item and suggest an updated meal name.
+
+Current meal name: "${currentMealName}"
+Previous item name: "${previousItemName}"
+New item name: "${itemName}"
+Original quantity unit: "${originalUnit}"
+
+Return JSON with this structure:
+{
+  "name": "${itemName}",
+  "quantity": {
+    "value": 1,
+    "unit": "${originalUnit}"
+  },
+  "nutrition": {
+    "calories": 150,
+    "protein": 10,
+    "carbs": 20,
+    "fat": 5
+  },
+  "updatedMealName": "Updated meal name reflecting the change"
+}
+
+Guidelines:
+1. Provide realistic nutrition values for a typical serving of ${itemName} using the unit "${originalUnit}"
+2. For the updatedMealName, consider how replacing "${previousItemName}" with "${itemName}" would change the overall meal description
+3. Keep the meal name concise but descriptive
+4. If the change is minor, you can keep the same meal name
+5. Focus on the most significant change in the meal
+6. ALWAYS use the original unit "${originalUnit}" in the quantity field
+
+Examples:
+- If changing "White Rice" to "Brown Rice" in "Chicken and Rice Bowl" → "Chicken and Brown Rice Bowl"
+- If changing "Apple" to "Banana" in "Fruit Salad" → "Fruit Salad with Banana"
+- If changing "Chicken Breast" to "Salmon" in "Grilled Chicken Salad" → "Grilled Salmon Salad"
+
+Return only valid JSON, no additional text.`;
+
+    try {
+      console.log(`🤖 [GEMINI] Sending item analysis request`);
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ]
+      });
+      
+      const responseText = result.response.text();
+      console.log(`🤖 [GEMINI] Item analysis response received, length: ${responseText?.length || 0}`);
+      
+      if (!responseText || responseText.trim() === '') {
+        console.error('❌ [GEMINI] Empty response received for item analysis');
+        throw new Error('Empty response from Gemini API');
+      }
+      
+      return responseText;
+    } catch (error) {
+      console.error('❌ [GEMINI] API Error for item analysis:', error.message);
+      console.error('❌ [GEMINI] Full error:', error);
+      throw error;
+    }
+  }
+
+  static async analyzeFoodItem(itemName, currentMealName, previousItemName, originalUnit, provider = 'gemini') {
+    try {
+      let result;
+      
+      if (provider === 'gemini') {
+        result = await this.analyzeFoodItemWithGemini(itemName, currentMealName, previousItemName, originalUnit);
+      } else {
+        result = await this.analyzeFoodItemWithOpenAI(itemName, currentMealName, previousItemName, originalUnit);
+      }
+      
+      return result;
+    } catch (error) {
+      throw new Error(`Failed to analyze food item: ${error.message}`);
+    }
+  }
+
   static async analyzeFoodCalories(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
       let result;
