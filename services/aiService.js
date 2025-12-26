@@ -466,17 +466,17 @@ Return only valid JSON, no additional text.`
     return completion.choices[0].message.content;
   }
 
-  static async analyzeFoodCalories(imageUrl, hint, provider = 'openai', userId = null, additionalData = {}) {
+  static async analyzeFoodCalories(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
       let result;
       let llmModel;
       
-      if (provider === 'gemini') {
+      if (provider === 'openai') {
         result = await this.analyzeFoodWithGemini(imageUrl, hint);
-        llmModel = 'gemini-2.5-flash';
+        llmModel = 'gpt-4o';
       } else {
         result = await this.analyzeFoodWithOpenAI(imageUrl, hint);
-        llmModel = 'gpt-4o';
+        llmModel = 'gemini-2.5-flash';
       }
       
       // Save meal data to database if userId is provided
