@@ -1,8 +1,38 @@
 const MealService = require('../services/mealService');
 const Meal = require('../models/schemas/Meal');
+const MealEditAudit = require('../models/schemas/MealEditAudit');
 const parseBody = require('../utils/parseBody');
 const mealFormatter = require('../utils/mealFormatter');
 const AiService = require('../services/aiService');
+
+/**
+ * Helper function to create a snapshot of meal state for audit
+ */
+function createMealSnapshot(meal) {
+  return {
+    name: meal.name,
+    totalNutrition: {
+      calories: { llm: meal.totalNutrition?.calories?.llm, final: meal.totalNutrition?.calories?.final },
+      protein: { llm: meal.totalNutrition?.protein?.llm, final: meal.totalNutrition?.protein?.final },
+      carbs: { llm: meal.totalNutrition?.carbs?.llm, final: meal.totalNutrition?.carbs?.final },
+      fat: { llm: meal.totalNutrition?.fat?.llm, final: meal.totalNutrition?.fat?.final }
+    },
+    items: meal.items.map(item => ({
+      id: item.id,
+      name: { llm: item.name?.llm, final: item.name?.final },
+      quantity: {
+        llm: item.quantity?.llm,
+        final: item.quantity?.final
+      },
+      nutrition: {
+        calories: { llm: item.nutrition?.calories?.llm, final: item.nutrition?.calories?.final },
+        protein: { llm: item.nutrition?.protein?.llm, final: item.nutrition?.protein?.final },
+        carbs: { llm: item.nutrition?.carbs?.llm, final: item.nutrition?.carbs?.final },
+        fat: { llm: item.nutrition?.fat?.llm, final: item.nutrition?.fat?.final }
+      }
+    }))
+  };
+}
 
 function createMeal(req, res) {
   parseBody(req, async (err, mealData) => {
@@ -81,6 +111,7 @@ async function updateMeal(req, res) {
       console.log('newItem: ' + newItem);
       console.log('mealId: ' + mealId);
       console.log('itemId: ' + itemId);
+      
       // Get the meal and verify ownership
       const meal = await Meal.findOne({ _id: mealId, userId });
       if (!meal) {
@@ -88,6 +119,9 @@ async function updateMeal(req, res) {
         res.end(JSON.stringify({ error: 'Meal not found' }));
         return;
       }
+
+      // Capture meal state BEFORE any changes for audit
+      const mealSnapshotBefore = createMealSnapshot(meal);
 
       // Find the item to update
       const itemIndex = meal.items.findIndex(item => item.id === itemId);
@@ -100,6 +134,12 @@ async function updateMeal(req, res) {
       const item = meal.items[itemIndex];
       console.log('newItem: ' + newItem);
       
+      // Track changes for audit
+      const changes = [];
+      let editType = null;
+      let llmInput = null;
+      let llmOutput = null;
+      
       // Check if nutrition fields are being updated directly
       const nutritionUpdate = data.nutrition || {};
       const hasNutritionUpdate = nutritionUpdate.calories !== undefined || 
@@ -109,6 +149,16 @@ async function updateMeal(req, res) {
 
       // Case 1: Quantity update (newQuantity is non-null, newItem is null)
       if (newQuantity !== null && newQuantity !== undefined && !newItem) {
+        editType = 'QUANTITY_UPDATE';
+        
+        // Track quantity change
+        changes.push({
+          itemId: itemId,
+          field: 'quantity',
+          previousValue: item.quantity.final?.value || item.quantity.llm?.value,
+          newValue: newQuantity
+        });
+        
         // Update quantity and recalculate nutrition proportionally
         const oldQuantity = item.quantity.llm.value;
         const ratio = newQuantity / oldQuantity;
@@ -121,26 +171,45 @@ async function updateMeal(req, res) {
 
         // Update final nutrition proportionally (only if not being updated directly)
         if (!hasNutritionUpdate) {
-          item.nutrition.calories.final = parseFloat((item.nutrition.calories.llm * ratio).toFixed(2));
-          item.nutrition.protein.final = parseFloat((item.nutrition.protein.llm * ratio).toFixed(2));
-          item.nutrition.carbs.final = parseFloat((item.nutrition.carbs.llm * ratio).toFixed(2));
-          item.nutrition.fat.final = parseFloat((item.nutrition.fat.llm * ratio).toFixed(2));
+          const newCalories = parseFloat((item.nutrition.calories.llm * ratio).toFixed(2));
+          const newProtein = parseFloat((item.nutrition.protein.llm * ratio).toFixed(2));
+          const newCarbs = parseFloat((item.nutrition.carbs.llm * ratio).toFixed(2));
+          const newFat = parseFloat((item.nutrition.fat.llm * ratio).toFixed(2));
+          
+          // Track nutrition changes
+          changes.push(
+            { itemId, field: 'calories', previousValue: item.nutrition.calories.final, newValue: newCalories },
+            { itemId, field: 'protein', previousValue: item.nutrition.protein.final, newValue: newProtein },
+            { itemId, field: 'carbs', previousValue: item.nutrition.carbs.final, newValue: newCarbs },
+            { itemId, field: 'fat', previousValue: item.nutrition.fat.final, newValue: newFat }
+          );
+          
+          item.nutrition.calories.final = newCalories;
+          item.nutrition.protein.final = newProtein;
+          item.nutrition.carbs.final = newCarbs;
+          item.nutrition.fat.final = newFat;
         }
       }
 
       // Case 1.5: Direct nutrition fields update
       if (hasNutritionUpdate) {
+        editType = 'NUTRITION_UPDATE';
+        
         // Update final nutrition values directly
         if (nutritionUpdate.calories !== undefined) {
+          changes.push({ itemId, field: 'calories', previousValue: item.nutrition.calories.final, newValue: nutritionUpdate.calories });
           item.nutrition.calories.final = parseFloat(parseFloat(nutritionUpdate.calories || 0).toFixed(2));
         }
         if (nutritionUpdate.protein !== undefined) {
+          changes.push({ itemId, field: 'protein', previousValue: item.nutrition.protein.final, newValue: nutritionUpdate.protein });
           item.nutrition.protein.final = parseFloat(parseFloat(nutritionUpdate.protein || 0).toFixed(2));
         }
         if (nutritionUpdate.carbs !== undefined) {
+          changes.push({ itemId, field: 'carbs', previousValue: item.nutrition.carbs.final, newValue: nutritionUpdate.carbs });
           item.nutrition.carbs.final = parseFloat(parseFloat(nutritionUpdate.carbs || 0).toFixed(2));
         }
         if (nutritionUpdate.fat !== undefined) {
+          changes.push({ itemId, field: 'fat', previousValue: item.nutrition.fat.final, newValue: nutritionUpdate.fat });
           item.nutrition.fat.final = parseFloat(parseFloat(nutritionUpdate.fat || 0).toFixed(2));
         }
       }
@@ -151,6 +220,24 @@ async function updateMeal(req, res) {
         const updatedMeal = await recomputeTotalNutrition(meal);
         await updatedMeal.save();
 
+        // Capture meal state AFTER changes for audit
+        const mealSnapshotAfter = createMealSnapshot(updatedMeal);
+
+        // Create audit entry (non-blocking)
+        MealEditAudit.create({
+          mealId: mealId,
+          userId: userId,
+          editType: editType,
+          changes: changes,
+          mealSnapshot: {
+            before: mealSnapshotBefore,
+            after: mealSnapshotAfter
+          },
+          llmInput: null, // No LLM call for quantity/nutrition updates
+          llmOutput: null,
+          status: 'success'
+        }).catch(err => console.error('Failed to create audit entry:', err));
+
         // Format response according to new format
         const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -160,9 +247,35 @@ async function updateMeal(req, res) {
 
       // Case 2: Item name update (newItem is non-null)
       if (newItem !== null) {
+        editType = 'ITEM_NAME_UPDATE';
+        
+        // Track name change
+        changes.push({
+          itemId: itemId,
+          field: 'name',
+          previousValue: item.name.final || item.name.llm,
+          newValue: newItem
+        });
+        
         // Get AI nutrition for the new item and updated meal name
         const originalUnit = item.quantity.llm.unit;
         const aiResult = await getNutritionForItem(newItem, meal.name, item.name.llm, originalUnit);
+        
+        // Store LLM input/output for audit
+        if (aiResult.auditData) {
+          llmInput = {
+            requestPayload: { newItem, currentMealName: meal.name, previousItemName: item.name.llm, originalUnit },
+            promptSent: aiResult.auditData.promptSent,
+            provider: aiResult.auditData.provider,
+            model: aiResult.auditData.model
+          };
+          llmOutput = {
+            rawResponse: aiResult.auditData.rawResponse,
+            parsedResponse: aiResult.auditData.parsedResponse,
+            tokensUsed: aiResult.auditData.tokensUsed,
+            latencyMs: aiResult.auditData.latencyMs
+          };
+        }
         
         // Determine the quantity value to use
         const quantityValue = newQuantity !== null && newQuantity !== undefined 
@@ -176,11 +289,20 @@ async function updateMeal(req, res) {
         
         // Update final quantity if newQuantity is provided
         if (newQuantity !== null && newQuantity !== undefined) {
+          changes.push({ itemId, field: 'quantity', previousValue: item.quantity.final?.value, newValue: newQuantity });
           item.quantity.final = {
             value: newQuantity,
             unit: quantityUnit
           };
         }
+
+        // Track nutrition changes from AI
+        changes.push(
+          { itemId, field: 'calories', previousValue: item.nutrition.calories.llm, newValue: aiResult.nutrition.calories },
+          { itemId, field: 'protein', previousValue: item.nutrition.protein.llm, newValue: aiResult.nutrition.protein },
+          { itemId, field: 'carbs', previousValue: item.nutrition.carbs.llm, newValue: aiResult.nutrition.carbs },
+          { itemId, field: 'fat', previousValue: item.nutrition.fat.llm, newValue: aiResult.nutrition.fat }
+        );
 
         // Update new item nutrition
         item.nutrition.calories.llm = aiResult.nutrition.calories;
@@ -194,13 +316,33 @@ async function updateMeal(req, res) {
         item.nutrition.fat.final = null;
 
         // Update overall meal name if provided by AI
-        if (aiResult.updatedMealName) {
+        if (aiResult.updatedMealName && aiResult.updatedMealName !== meal.name) {
+          changes.push({ itemId, field: 'mealName', previousValue: meal.name, newValue: aiResult.updatedMealName });
           meal.name = aiResult.updatedMealName;
         }
 
         // Recompute total nutrition
         const updatedMeal = await recomputeTotalNutrition(meal);
         await updatedMeal.save();
+
+        // Capture meal state AFTER changes for audit
+        const mealSnapshotAfter = createMealSnapshot(updatedMeal);
+
+        // Create audit entry (non-blocking)
+        MealEditAudit.create({
+          mealId: mealId,
+          userId: userId,
+          editType: editType,
+          llmInput: llmInput,
+          llmOutput: llmOutput,
+          changes: changes,
+          mealSnapshot: {
+            before: mealSnapshotBefore,
+            after: mealSnapshotAfter
+          },
+          status: aiResult.error ? 'failed' : 'success',
+          errorMessage: aiResult.error || null
+        }).catch(err => console.error('Failed to create audit entry:', err));
 
         // Format response according to new format
         const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
@@ -326,19 +468,26 @@ async function recomputeTotalNutrition(meal) {
 }
 
 // Helper function to get nutrition for a new item via AI
+// Returns both the parsed result and audit data
 async function getNutritionForItem(newItemName, currentMealName, previousItemName, originalUnit) {
   const AiService = require('../services/aiService');
 
   try {
-    // Use AI service (defaults to Gemini)
+    // Use AI service (defaults to Gemini) - now returns { response, auditData }
     const result = await AiService.analyzeFoodItem(newItemName, currentMealName, previousItemName, originalUnit);
-    const parsedResult = JSON.parse(result);
+    const parsedResult = JSON.parse(result.response);
     console.log('parsedResult', JSON.stringify(parsedResult));
+    
     return {
       name: parsedResult.name,
       quantity: parsedResult.quantity,
       nutrition: parsedResult.nutrition,
-      updatedMealName: parsedResult.updatedMealName
+      updatedMealName: parsedResult.updatedMealName,
+      // Include audit data for tracking
+      auditData: {
+        ...result.auditData,
+        parsedResponse: parsedResult
+      }
     };
   } catch (error) {
     console.error('Error getting AI nutrition:', error);
@@ -347,7 +496,9 @@ async function getNutritionForItem(newItemName, currentMealName, previousItemNam
       name: newItemName,
       quantity: { value: 1, unit: 'serving' },
       nutrition: { calories: 100, protein: 5, carbs: 15, fat: 3 },
-      updatedMealName: currentMealName // Keep original name if AI fails
+      updatedMealName: currentMealName, // Keep original name if AI fails
+      auditData: null,
+      error: error.message
     };
   }
 }
@@ -526,6 +677,140 @@ function isMainFoodItem(itemName) {
   return mainKeywords.some(keyword => lowerItemName.includes(keyword));
 }
 
+/**
+ * Get audit history for a meal
+ * GET /meals/:mealId/audit
+ */
+async function getMealAuditHistory(req, res) {
+  try {
+    const urlParts = req.url.split('/');
+    const mealId = urlParts[2]; // Extract mealId from /meals/:mealId/audit
+    const userId = req.user.userId;
+    
+    // Parse query parameters
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const limit = parseInt(url.searchParams.get('limit')) || 50;
+    const skip = parseInt(url.searchParams.get('skip')) || 0;
+    const editType = url.searchParams.get('editType');
+
+    // Verify the user owns the meal
+    const meal = await Meal.findOne({ _id: mealId, userId });
+    if (!meal) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Meal not found' }));
+      return;
+    }
+
+    // Get audit history
+    const auditHistory = await MealEditAudit.getAuditHistory(mealId, { limit, skip, editType });
+    const totalCount = await MealEditAudit.countDocuments({ mealId });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      mealId: mealId,
+      mealName: meal.name,
+      auditHistory: auditHistory,
+      pagination: {
+        limit,
+        skip,
+        total: totalCount,
+        hasMore: skip + auditHistory.length < totalCount
+      }
+    }));
+
+  } catch (error) {
+    console.error('Error fetching meal audit history:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to fetch audit history', details: error.message }));
+  }
+}
+
+/**
+ * Get a specific audit entry by ID
+ * GET /meals/audit/:auditId
+ */
+async function getAuditEntry(req, res) {
+  try {
+    const urlParts = req.url.split('/');
+    const auditId = urlParts[3]; // Extract auditId from /meals/audit/:auditId
+    const userId = req.user.userId;
+
+    const auditEntry = await MealEditAudit.findById(auditId).lean();
+    
+    if (!auditEntry) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Audit entry not found' }));
+      return;
+    }
+
+    // Verify the user owns the meal
+    if (auditEntry.userId.toString() !== userId) {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Access denied' }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      auditEntry: auditEntry
+    }));
+
+  } catch (error) {
+    console.error('Error fetching audit entry:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to fetch audit entry', details: error.message }));
+  }
+}
+
+/**
+ * Get user's audit summary
+ * GET /meals/audit/summary
+ */
+async function getUserAuditSummary(req, res) {
+  try {
+    const userId = req.user.userId;
+    
+    // Parse query parameters
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const startDate = url.searchParams.get('start');
+    const endDate = url.searchParams.get('end');
+
+    if (!startDate || !endDate) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'start and end dates are required' }));
+      return;
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const summary = await MealEditAudit.getUserAuditSummary(userId, start, end);
+
+    // Get recent edits
+    const recentEdits = await MealEditAudit.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select('mealId editType createdAt llmOutput.latencyMs llmInput.provider')
+      .lean();
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      period: { start: startDate, end: endDate },
+      summary: summary,
+      recentEdits: recentEdits
+    }));
+
+  } catch (error) {
+    console.error('Error fetching audit summary:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to fetch audit summary', details: error.message }));
+  }
+}
+
 module.exports = {
   createMeal,
   getMeals,
@@ -534,5 +819,8 @@ module.exports = {
   bulkEditItems,
   deleteMeal,
   getDailySummary,
-  getCalendarData
+  getCalendarData,
+  getMealAuditHistory,
+  getAuditEntry,
+  getUserAuditSummary
 }; 

@@ -9,7 +9,9 @@ const routes = {
   'POST /meals/update': mealController.updateMeal,
   'POST /meals/bulk-edit': mealController.bulkEditItems,
   'GET /meals/summary/daily': mealController.getDailySummary,
-  'GET /meals/calendar': mealController.getCalendarData
+  'GET /meals/calendar': mealController.getCalendarData,
+  // Audit routes
+  'GET /meals/audit/summary': mealController.getUserAuditSummary
 };
 
 function mealRoutes(req, res) {
@@ -26,8 +28,16 @@ function mealRoutes(req, res) {
 
   // If exact match not found, try to match parameterized routes
   if (!handler) {
+    // Check for /meals/:mealId/audit pattern (audit history for a meal)
+    if (method === 'GET' && basePath.match(/^\/meals\/[^\/]+\/audit$/)) {
+      handler = mealController.getMealAuditHistory;
+    }
+    // Check for /meals/audit/:auditId pattern (specific audit entry)
+    else if (method === 'GET' && basePath.match(/^\/meals\/audit\/[^\/]+$/) && !basePath.includes('summary')) {
+      handler = mealController.getAuditEntry;
+    }
     // Check for /meals/:id pattern
-    if (basePath.match(/^\/meals\/[^\/]+$/)) {
+    else if (basePath.match(/^\/meals\/[^\/]+$/)) {
       routeKey = `${method} /meals/:id`;
       handler = routes[routeKey];
     }

@@ -412,16 +412,11 @@ Return only valid JSON, no additional text.`;
   }
 
   static async analyzeFoodItemWithOpenAI(itemName, currentMealName, previousItemName, originalUnit) {
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a nutrition expert. Provide nutrition information for food items and suggest updated meal names.'
-        },
-        {
-          role: 'user',
-          content: `A user is updating a meal item. Please provide nutrition information for the new item and suggest an updated meal name.
+    const startTime = Date.now();
+    const modelName = 'gpt-4o';
+    
+    const systemPrompt = 'You are a nutrition expert. Provide nutrition information for food items and suggest updated meal names.';
+    const userPrompt = `A user is updating a meal item. Please provide nutrition information for the new item and suggest an updated meal name.
 
 Current meal name: "${currentMealName}"
 Previous item name: "${previousItemName}"
@@ -457,16 +452,41 @@ Examples:
 - If changing "Apple" to "Banana" in "Fruit Salad" → "Fruit Salad with Banana"
 - If changing "Chicken Breast" to "Salmon" in "Grilled Chicken Salad" → "Grilled Salmon Salad"
 
-Return only valid JSON, no additional text.`
-        }
+Return only valid JSON, no additional text.`;
+
+    const completion = await openai.chat.completions.create({
+      model: modelName,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ],
       max_tokens: 1000,
       response_format: { type: "json_object" }
     });
-    return completion.choices[0].message.content;
+    
+    const latencyMs = Date.now() - startTime;
+    const responseText = completion.choices[0].message.content;
+    
+    // Return with audit data
+    return {
+      response: responseText,
+      auditData: {
+        provider: 'openai',
+        model: modelName,
+        promptSent: `[System]: ${systemPrompt}\n\n[User]: ${userPrompt}`,
+        rawResponse: responseText,
+        tokensUsed: {
+          input: completion.usage?.prompt_tokens || null,
+          output: completion.usage?.completion_tokens || null,
+          total: completion.usage?.total_tokens || null
+        },
+        latencyMs
+      }
+    };
   }
 
   static async analyzeFoodItemWithGemini(itemName, currentMealName, previousItemName, originalUnit) {
+    const startTime = Date.now();
     const modelName = 'gemini-2.5-flash';
     console.log(`🤖 [GEMINI] Using model: ${modelName} for item analysis`);
     const model = genAI.getGenerativeModel({ model: modelName });
@@ -520,6 +540,7 @@ Return only valid JSON, no additional text.`;
         ]
       });
       
+      const latencyMs = Date.now() - startTime;
       const responseText = result.response.text();
       console.log(`🤖 [GEMINI] Item analysis response received, length: ${responseText?.length || 0}`);
       
@@ -528,7 +549,25 @@ Return only valid JSON, no additional text.`;
         throw new Error('Empty response from Gemini API');
       }
       
-      return responseText;
+      // Extract token usage from Gemini response
+      const usageMetadata = result.response.usageMetadata;
+      
+      // Return with audit data
+      return {
+        response: responseText,
+        auditData: {
+          provider: 'gemini',
+          model: modelName,
+          promptSent: prompt,
+          rawResponse: responseText,
+          tokensUsed: {
+            input: usageMetadata?.promptTokenCount || null,
+            output: usageMetadata?.candidatesTokenCount || null,
+            total: usageMetadata?.totalTokenCount || null
+          },
+          latencyMs
+        }
+      };
     } catch (error) {
       console.error('❌ [GEMINI] API Error for item analysis:', error.message);
       console.error('❌ [GEMINI] Full error:', error);
@@ -546,7 +585,11 @@ Return only valid JSON, no additional text.`;
         result = await this.analyzeFoodItemWithOpenAI(itemName, currentMealName, previousItemName, originalUnit);
       }
       
-      return result;
+      // Return both the response text and audit data
+      return {
+        response: result.response,
+        auditData: result.auditData
+      };
     } catch (error) {
       throw new Error(`Failed to analyze food item: ${error.message}`);
     }

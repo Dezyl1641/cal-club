@@ -310,7 +310,7 @@ class GoalService {
     const macroConfigs = {
       'lose': { protein_factor: 2.0, fat_pct: 0.25 },
       'maintain': { protein_factor: 1.6, fat_pct: 0.30 },
-      'gain': { protein_factor: 1.8, fat_pct: 0.25 }
+      'gain': { protein_factor: 2.2, fat_pct: 0.25 }
     };
 
     const config = macroConfigs[goal_type] || macroConfigs['maintain'];

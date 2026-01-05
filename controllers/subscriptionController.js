@@ -4,6 +4,8 @@ const Membership = require('../models/schemas/Membership');
 const paymentService = require('../services/paymentService');
 const googlePlayService = require('../services/googlePlayService');
 const { GooglePlayService } = require('../services/googlePlayService');
+const appleStoreService = require('../services/appleStoreService');
+const { AppleStoreService } = require('../services/appleStoreService');
 const parseBody = require('../utils/parseBody');
 
 async function createSubscription(req, res) {
@@ -507,6 +509,440 @@ async function getGooglePlaySubscriptionStatus(req, res) {
   }
 }
 
+/**
+ * Verify and link an Apple App Store subscription purchase
+ * Called by the iOS app after a successful purchase
+ * 
+ * POST /subscriptions/apple/verify
+ * Body: { 
+ *   receiptData: string (base64 encoded receipt),
+ *   productId: string,
+ *   transactionId?: string,
+ *   originalTransactionId?: string
+ * }
+ */
+async function verifyApplePurchase(req, res) {
+  try {
+    const body = await new Promise((resolve, reject) => {
+      parseBody(req, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    const { receiptData, productId, transactionId, originalTransactionId } = body;
+    const userId = req.user.userId;
+
+    console.log('🍎 [APPLE_VERIFY] Verifying purchase');
+    console.log('   User ID:', userId);
+    console.log('   Product ID:', productId);
+    console.log('   Transaction ID:', transactionId || 'N/A');
+    console.log('   Original Transaction ID:', originalTransactionId || 'N/A');
+
+    // Validate required fields
+    if (!receiptData) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'receiptData is required' 
+      }));
+      return;
+    }
+
+    // Verify receipt with Apple
+    let receiptResponse;
+    try {
+      receiptResponse = await appleStoreService.verifyReceipt(receiptData);
+    } catch (error) {
+      console.error('❌ [APPLE_VERIFY] Receipt verification failed:', error.message);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'Receipt verification failed',
+        details: error.message 
+      }));
+      return;
+    }
+
+    console.log('✅ [APPLE_VERIFY] Receipt verified with Apple');
+    console.log('   Environment:', receiptResponse.environment);
+
+    // Extract subscription info from receipt
+    const subscriptionInfo = appleStoreService.extractSubscriptionInfo(receiptResponse, productId);
+
+    if (!subscriptionInfo) {
+      console.error('❌ [APPLE_VERIFY] No subscription found in receipt');
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'No subscription found in receipt',
+        productId: productId 
+      }));
+      return;
+    }
+
+    console.log('✅ [APPLE_VERIFY] Subscription info extracted');
+    console.log('   Original Transaction ID:', subscriptionInfo.originalTransactionId);
+    console.log('   Product ID:', subscriptionInfo.productId);
+    console.log('   Expires:', subscriptionInfo.expiresDate);
+
+    // Use originalTransactionId as the unique identifier
+    const appleOriginalTransactionId = subscriptionInfo.originalTransactionId;
+
+    // Check if subscription already exists (idempotency)
+    const existingSubscription = await Subscription.findOne({
+      provider: 'APPLE',
+      external_subscription_id: appleOriginalTransactionId
+    });
+
+    if (existingSubscription) {
+      console.log('⚠️ [APPLE_VERIFY] Subscription already exists:', existingSubscription._id);
+      
+      // Verify the subscription still belongs to this user
+      if (existingSubscription.userId.toString() !== userId) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          error: 'Transaction already linked to another user' 
+        }));
+        return;
+      }
+
+      // Update subscription with latest info
+      existingSubscription.currentPeriodStart = subscriptionInfo.purchaseDate;
+      existingSubscription.currentPeriodEnd = subscriptionInfo.expiresDate;
+      existingSubscription.autoRenewing = subscriptionInfo.autoRenewStatus;
+      existingSubscription.status = AppleStoreService.mapSubscriptionStatus(subscriptionInfo);
+      await existingSubscription.save();
+
+      // Return existing subscription
+      const membership = await Membership.findOne({ 
+        subscriptionId: existingSubscription._id 
+      }).sort({ createdAt: -1 });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        message: 'Subscription already verified',
+        subscription: {
+          id: existingSubscription._id,
+          provider: existingSubscription.provider,
+          external_subscription_id: existingSubscription.external_subscription_id,
+          external_order_id: existingSubscription.external_order_id,
+          status: existingSubscription.status,
+          currentPeriodStart: existingSubscription.currentPeriodStart,
+          currentPeriodEnd: existingSubscription.currentPeriodEnd,
+          autoRenewing: existingSubscription.autoRenewing
+        },
+        membership: membership ? {
+          id: membership._id,
+          start: membership.start,
+          end: membership.end,
+          status: membership.status
+        } : null,
+        environment: receiptResponse.environment
+      }));
+      return;
+    }
+
+    // Find the plan by App Store product ID
+    let plan = await Plan.findOne({ appstore_product_id: subscriptionInfo.productId, isActive: true });
+    
+    if (!plan) {
+      // Fallback: try to find by external_plan_id (if same ID used)
+      plan = await Plan.findOne({ external_plan_id: subscriptionInfo.productId, isActive: true });
+    }
+
+    if (!plan) {
+      console.error('❌ [APPLE_VERIFY] No plan found for product:', subscriptionInfo.productId);
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'No matching plan found for this product',
+        productId: subscriptionInfo.productId 
+      }));
+      return;
+    }
+
+    console.log('✅ [APPLE_VERIFY] Found matching plan:', plan.title);
+
+    // Map Apple subscription status
+    const status = AppleStoreService.mapSubscriptionStatus(subscriptionInfo);
+
+    // Create subscription record
+    const subscription = new Subscription({
+      userId: userId,
+      provider: 'APPLE',
+      external_subscription_id: appleOriginalTransactionId,
+      external_plan_id: subscriptionInfo.productId,
+      external_order_id: subscriptionInfo.webOrderLineItemId || subscriptionInfo.transactionId,
+      status: status,
+      currentPeriodStart: subscriptionInfo.purchaseDate,
+      currentPeriodEnd: subscriptionInfo.expiresDate,
+      autoRenewing: subscriptionInfo.autoRenewStatus,
+      acknowledged: true // Apple doesn't require acknowledgment like Google Play
+    });
+
+    await subscription.save();
+    console.log('✅ [APPLE_VERIFY] Subscription created:', subscription._id);
+
+    // Create membership
+    const startDate = new Date(subscriptionInfo.purchaseDate);
+    const endDate = new Date(subscriptionInfo.expiresDate);
+    // Round end date to EOD
+    endDate.setHours(23, 59, 59, 999);
+
+    const membership = new Membership({
+      userId: userId,
+      subscriptionId: subscription._id,
+      planId: plan._id,
+      start: startDate,
+      end: endDate,
+      status: 'purchased'
+    });
+
+    await membership.save();
+    console.log('✅ [APPLE_VERIFY] Membership created:', membership._id);
+
+    res.writeHead(201, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      message: 'Apple purchase verified and subscription created',
+      subscription: {
+        id: subscription._id,
+        provider: subscription.provider,
+        external_subscription_id: subscription.external_subscription_id,
+        external_order_id: subscription.external_order_id,
+        status: subscription.status,
+        currentPeriodStart: subscription.currentPeriodStart,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        autoRenewing: subscription.autoRenewing
+      },
+      membership: {
+        id: membership._id,
+        planId: plan._id,
+        planTitle: plan.title,
+        start: membership.start,
+        end: membership.end,
+        status: membership.status
+      },
+      environment: receiptResponse.environment,
+      subscriptionInfo: {
+        isInTrial: subscriptionInfo.isInTrial,
+        isInIntroOffer: subscriptionInfo.isInIntroOffer,
+        originalPurchaseDate: subscriptionInfo.originalPurchaseDate
+      }
+    }));
+
+  } catch (error) {
+    console.error('❌ [APPLE_VERIFY] Error:', error.message);
+    console.error('Stack:', error.stack);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      error: 'Failed to verify Apple purchase',
+      details: error.message 
+    }));
+  }
+}
+
+/**
+ * Get subscription status from Apple
+ * Useful for checking current state without modifying local data
+ * 
+ * POST /subscriptions/apple/status
+ * Body: { receiptData: string }
+ */
+async function getAppleSubscriptionStatus(req, res) {
+  try {
+    const body = await new Promise((resolve, reject) => {
+      parseBody(req, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    const { receiptData, productId } = body;
+
+    if (!receiptData) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'receiptData is required' 
+      }));
+      return;
+    }
+
+    const receiptResponse = await appleStoreService.verifyReceipt(receiptData);
+    const subscriptionInfo = appleStoreService.extractSubscriptionInfo(receiptResponse, productId);
+    const status = AppleStoreService.mapSubscriptionStatus(subscriptionInfo);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      environment: receiptResponse.environment,
+      appleData: subscriptionInfo ? {
+        originalTransactionId: subscriptionInfo.originalTransactionId,
+        productId: subscriptionInfo.productId,
+        purchaseDate: subscriptionInfo.purchaseDate,
+        expiresDate: subscriptionInfo.expiresDate,
+        isExpired: subscriptionInfo.isExpired,
+        isInTrial: subscriptionInfo.isInTrial,
+        isInIntroOffer: subscriptionInfo.isInIntroOffer,
+        autoRenewStatus: subscriptionInfo.autoRenewStatus,
+        gracePeriodExpiresDate: subscriptionInfo.gracePeriodExpiresDate
+      } : null,
+      mappedStatus: status
+    }));
+
+  } catch (error) {
+    console.error('Error getting Apple subscription status:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      error: 'Failed to get Apple subscription status',
+      details: error.message 
+    }));
+  }
+}
+
+/**
+ * Restore Apple purchases
+ * Called when user reinstalls app or switches devices
+ * 
+ * POST /subscriptions/apple/restore
+ * Body: { receiptData: string }
+ */
+async function restoreApplePurchases(req, res) {
+  try {
+    const body = await new Promise((resolve, reject) => {
+      parseBody(req, (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+
+    const { receiptData } = body;
+    const userId = req.user.userId;
+
+    console.log('🍎 [APPLE_RESTORE] Restoring purchases for user:', userId);
+
+    if (!receiptData) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'receiptData is required' 
+      }));
+      return;
+    }
+
+    // Verify receipt with Apple
+    let receiptResponse;
+    try {
+      receiptResponse = await appleStoreService.verifyReceipt(receiptData);
+    } catch (error) {
+      console.error('❌ [APPLE_RESTORE] Receipt verification failed:', error.message);
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ 
+        error: 'Receipt verification failed',
+        details: error.message 
+      }));
+      return;
+    }
+
+    const latestReceiptInfo = receiptResponse.latest_receipt_info || [];
+    const restoredSubscriptions = [];
+
+    // Process each subscription in the receipt
+    for (const transaction of latestReceiptInfo) {
+      const originalTransactionId = transaction.original_transaction_id;
+      
+      // Check if subscription exists
+      let subscription = await Subscription.findOne({
+        provider: 'APPLE',
+        external_subscription_id: originalTransactionId
+      });
+
+      if (subscription) {
+        // Update existing subscription to link to this user if not already linked
+        if (!subscription.userId || subscription.userId.toString() !== userId) {
+          console.log(`🔗 [APPLE_RESTORE] Linking subscription ${subscription._id} to user ${userId}`);
+          subscription.userId = userId;
+        }
+
+        // Update subscription details
+        subscription.currentPeriodEnd = new Date(parseInt(transaction.expires_date_ms));
+        subscription.status = parseInt(transaction.expires_date_ms) > Date.now() ? 'active' : 'expired';
+        await subscription.save();
+
+        restoredSubscriptions.push({
+          id: subscription._id,
+          productId: transaction.product_id,
+          status: subscription.status,
+          expiresDate: subscription.currentPeriodEnd
+        });
+      } else {
+        // Create new subscription for restored purchase
+        const subscriptionInfo = appleStoreService.extractSubscriptionInfo(receiptResponse, transaction.product_id);
+        
+        if (subscriptionInfo && !subscriptionInfo.isExpired) {
+          // Find the plan
+          let plan = await Plan.findOne({ appstore_product_id: transaction.product_id, isActive: true });
+          if (!plan) {
+            plan = await Plan.findOne({ external_plan_id: transaction.product_id, isActive: true });
+          }
+
+          if (plan) {
+            const newSubscription = new Subscription({
+              userId: userId,
+              provider: 'APPLE',
+              external_subscription_id: originalTransactionId,
+              external_plan_id: transaction.product_id,
+              external_order_id: transaction.web_order_line_item_id || transaction.transaction_id,
+              status: 'active',
+              currentPeriodStart: new Date(parseInt(transaction.purchase_date_ms)),
+              currentPeriodEnd: new Date(parseInt(transaction.expires_date_ms)),
+              autoRenewing: true,
+              acknowledged: true
+            });
+            await newSubscription.save();
+
+            // Create membership
+            const membership = new Membership({
+              userId: userId,
+              subscriptionId: newSubscription._id,
+              planId: plan._id,
+              start: newSubscription.currentPeriodStart,
+              end: newSubscription.currentPeriodEnd,
+              status: 'purchased'
+            });
+            await membership.save();
+
+            restoredSubscriptions.push({
+              id: newSubscription._id,
+              productId: transaction.product_id,
+              status: newSubscription.status,
+              expiresDate: newSubscription.currentPeriodEnd,
+              isNew: true
+            });
+
+            console.log(`✅ [APPLE_RESTORE] Created new subscription: ${newSubscription._id}`);
+          }
+        }
+      }
+    }
+
+    console.log(`✅ [APPLE_RESTORE] Restored ${restoredSubscriptions.length} subscriptions`);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      message: `Restored ${restoredSubscriptions.length} subscription(s)`,
+      restoredSubscriptions,
+      environment: receiptResponse.environment
+    }));
+
+  } catch (error) {
+    console.error('❌ [APPLE_RESTORE] Error:', error.message);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      error: 'Failed to restore Apple purchases',
+      details: error.message 
+    }));
+  }
+}
+
 module.exports = {
   createSubscription,
   getSubscription,
@@ -514,5 +950,8 @@ module.exports = {
   getActivePlans,
   cancelMembership,
   verifyGooglePlayPurchase,
-  getGooglePlaySubscriptionStatus
+  getGooglePlaySubscriptionStatus,
+  verifyApplePurchase,
+  getAppleSubscriptionStatus,
+  restoreApplePurchases
 };

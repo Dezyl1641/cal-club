@@ -1,5 +1,6 @@
 const webhookController = require('../controllers/webhookController');
 const googlePlayWebhookController = require('../controllers/googlePlayWebhookController');
+const appleWebhookController = require('../controllers/appleWebhookController');
 
 const routes = {
   // Razorpay webhooks
@@ -7,7 +8,10 @@ const routes = {
   'GET /webhooks/events': webhookController.getPaymentEvents,
   
   // Google Play RTDN (Real-Time Developer Notifications)
-  'POST /webhooks/google-play': googlePlayWebhookController.handleGooglePlayWebhook
+  'POST /webhooks/google-play': googlePlayWebhookController.handleGooglePlayWebhook,
+  
+  // Apple App Store Server Notifications V2
+  'POST /webhooks/apple': appleWebhookController.handleAppleWebhook
 };
 
 function webhookRoutes(req, res) {

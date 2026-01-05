@@ -9,7 +9,12 @@ const routes = {
   
   // Google Play subscription routes
   'POST /subscriptions/google-play/verify': subscriptionController.verifyGooglePlayPurchase,
-  'POST /subscriptions/google-play/status': subscriptionController.getGooglePlaySubscriptionStatus
+  'POST /subscriptions/google-play/status': subscriptionController.getGooglePlaySubscriptionStatus,
+  
+  // Apple App Store subscription routes
+  'POST /subscriptions/apple/verify': subscriptionController.verifyApplePurchase,
+  'POST /subscriptions/apple/status': subscriptionController.getAppleSubscriptionStatus,
+  'POST /subscriptions/apple/restore': subscriptionController.restoreApplePurchases
 };
 
 function subscriptionRoutes(req, res) {
@@ -25,8 +30,8 @@ function subscriptionRoutes(req, res) {
   }
 
   // Check for dynamic routes (like /subscriptions/:id)
-  // But not for google-play routes which should be handled above
-  if (req.method === 'GET' && basePath.startsWith('/subscriptions/') && !basePath.includes('google-play')) {
+  // But not for google-play or apple routes which should be handled above
+  if (req.method === 'GET' && basePath.startsWith('/subscriptions/') && !basePath.includes('google-play') && !basePath.includes('apple')) {
     subscriptionController.getSubscriptionById(req, res);
     return true;
   }
