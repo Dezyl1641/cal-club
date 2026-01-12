@@ -159,8 +159,10 @@ async function updateMeal(req, res) {
           newValue: newQuantity
         });
         
-        // Update quantity and recalculate nutrition proportionally
-        const oldQuantity = item.quantity.llm.value;
+        // Determine old quantity: use final if it exists (subsequent update), otherwise use llm (first update)
+        const oldQuantity = (item.quantity.final?.value !== null && item.quantity.final?.value !== undefined)
+          ? item.quantity.final.value
+          : item.quantity.llm.value;
         const ratio = newQuantity / oldQuantity;
 
         // Update final quantity
@@ -171,17 +173,31 @@ async function updateMeal(req, res) {
 
         // Update final nutrition proportionally (only if not being updated directly)
         if (!hasNutritionUpdate) {
-          const newCalories = parseFloat((item.nutrition.calories.llm * ratio).toFixed(2));
-          const newProtein = parseFloat((item.nutrition.protein.llm * ratio).toFixed(2));
-          const newCarbs = parseFloat((item.nutrition.carbs.llm * ratio).toFixed(2));
-          const newFat = parseFloat((item.nutrition.fat.llm * ratio).toFixed(2));
+          // If final exists, use final * ratio (subsequent update), otherwise use llm * ratio (first update)
+          const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined)
+            ? item.nutrition.calories.final
+            : item.nutrition.calories.llm;
+          const baseProtein = (item.nutrition.protein.final !== null && item.nutrition.protein.final !== undefined)
+            ? item.nutrition.protein.final
+            : item.nutrition.protein.llm;
+          const baseCarbs = (item.nutrition.carbs.final !== null && item.nutrition.carbs.final !== undefined)
+            ? item.nutrition.carbs.final
+            : item.nutrition.carbs.llm;
+          const baseFat = (item.nutrition.fat.final !== null && item.nutrition.fat.final !== undefined)
+            ? item.nutrition.fat.final
+            : item.nutrition.fat.llm;
+
+          const newCalories = parseFloat((baseCalories * ratio).toFixed(2));
+          const newProtein = parseFloat((baseProtein * ratio).toFixed(2));
+          const newCarbs = parseFloat((baseCarbs * ratio).toFixed(2));
+          const newFat = parseFloat((baseFat * ratio).toFixed(2));
           
           // Track nutrition changes
           changes.push(
-            { itemId, field: 'calories', previousValue: item.nutrition.calories.final, newValue: newCalories },
-            { itemId, field: 'protein', previousValue: item.nutrition.protein.final, newValue: newProtein },
-            { itemId, field: 'carbs', previousValue: item.nutrition.carbs.final, newValue: newCarbs },
-            { itemId, field: 'fat', previousValue: item.nutrition.fat.final, newValue: newFat }
+            { itemId, field: 'calories', previousValue: baseCalories, newValue: newCalories },
+            { itemId, field: 'protein', previousValue: baseProtein, newValue: newProtein },
+            { itemId, field: 'carbs', previousValue: baseCarbs, newValue: newCarbs },
+            { itemId, field: 'fat', previousValue: baseFat, newValue: newFat }
           );
           
           item.nutrition.calories.final = newCalories;
@@ -513,6 +529,7 @@ function bulkEditItems(req, res) {
 
     try {
       const { mealId, items } = data;
+      const userId = req.user.userId;
 
       if (!mealId || !items || !Array.isArray(items) || items.length === 0) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -521,12 +538,20 @@ function bulkEditItems(req, res) {
       }
 
       // Fetch the meal
-      const meal = await Meal.findOne({ _id: mealId, userId: req.user.userId });
+      const meal = await Meal.findOne({ _id: mealId, userId, deletedAt: null });
       if (!meal) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Meal not found' }));
         return;
       }
+
+      // Capture meal state BEFORE any changes for audit
+      const mealSnapshotBefore = createMealSnapshot(meal);
+
+      // Track changes for audit
+      const changes = [];
+      let llmInput = null;
+      let llmOutput = null;
 
       // Prepare items for batch AI call
       const batchItems = [];
@@ -586,9 +611,30 @@ function bulkEditItems(req, res) {
           hasMainItemChange,
           mainItemInfo
         );
+
+        // Store LLM input/output for audit
+        if (aiResult.auditData) {
+          llmInput = {
+            requestPayload: { 
+              items: batchItems, 
+              currentMealName: meal.name, 
+              shouldUpdateMealName: hasMainItemChange,
+              mainItemInfo: mainItemInfo
+            },
+            promptSent: aiResult.auditData.promptSent,
+            provider: aiResult.auditData.provider,
+            model: aiResult.auditData.model
+          };
+          llmOutput = {
+            rawResponse: aiResult.auditData.rawResponse,
+            parsedResponse: aiResult.auditData.parsedResponse,
+            tokensUsed: aiResult.auditData.tokensUsed,
+            latencyMs: aiResult.auditData.latencyMs
+          };
+        }
       }
 
-      // Apply updates to each item
+      // Apply updates to each item and track changes
       let aiItemIndex = 0;
       for (const [itemId, updateData] of itemUpdates) {
         const { itemIndex, newQuantity, newItem, originalItem } = updateData;
@@ -599,6 +645,14 @@ function bulkEditItems(req, res) {
           const aiItem = aiResult.items[aiItemIndex];
           aiItemIndex++;
 
+          // Track name change
+          changes.push({
+            itemId: itemId,
+            field: 'name',
+            previousValue: item.name.final || item.name.llm,
+            newValue: aiItem.name
+          });
+
           // Determine the quantity value to use
           const quantityValue = newQuantity !== null && newQuantity !== undefined 
             ? newQuantity 
@@ -608,15 +662,30 @@ function bulkEditItems(req, res) {
             ? item.quantity.llm.unit
             : aiItem.quantity.unit;
 
+          // Track quantity change if provided
+          if (newQuantity !== null && newQuantity !== undefined) {
+            changes.push({
+              itemId: itemId,
+              field: 'quantity',
+              previousValue: item.quantity.final?.value || item.quantity.llm?.value,
+              newValue: newQuantity
+            });
+          }
+
           // Update item name and quantity
           item.name.final = aiItem.name;
-
-    
           item.quantity.final = {
-            value: newQuantity,
+            value: quantityValue,
             unit: quantityUnit
           };
-          
+
+          // Track nutrition changes from AI
+          changes.push(
+            { itemId, field: 'calories', previousValue: item.nutrition.calories.final || item.nutrition.calories.llm, newValue: aiItem.nutrition.calories },
+            { itemId, field: 'protein', previousValue: item.nutrition.protein.final || item.nutrition.protein.llm, newValue: aiItem.nutrition.protein },
+            { itemId, field: 'carbs', previousValue: item.nutrition.carbs.final || item.nutrition.carbs.llm, newValue: aiItem.nutrition.carbs },
+            { itemId, field: 'fat', previousValue: item.nutrition.fat.final || item.nutrition.fat.llm, newValue: aiItem.nutrition.fat }
+          );
 
           // Update nutrition from AI
           item.nutrition.calories.final = aiItem.nutrition.calories;
@@ -626,8 +695,19 @@ function bulkEditItems(req, res) {
 
         } else if (newQuantity !== null && newQuantity !== undefined && !newItem) {
           // Case: Only quantity changed - calculate proportionally
-          const oldQuantity = item.quantity.llm.value;
+          // Determine old quantity: use final if it exists (subsequent update), otherwise use llm (first update)
+          const oldQuantity = (item.quantity.final?.value !== null && item.quantity.final?.value !== undefined)
+            ? item.quantity.final.value
+            : item.quantity.llm.value;
           const ratio = newQuantity / oldQuantity;
+
+          // Track quantity change
+          changes.push({
+            itemId: itemId,
+            field: 'quantity',
+            previousValue: oldQuantity,
+            newValue: newQuantity
+          });
 
           // Update final quantity
           item.quantity.final = {
@@ -635,22 +715,74 @@ function bulkEditItems(req, res) {
             unit: item.quantity.llm.unit
           };
 
+          // Calculate new nutrition values proportionally
+          // If final exists, use final * ratio (subsequent update), otherwise use llm * ratio (first update)
+          const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined)
+            ? item.nutrition.calories.final
+            : item.nutrition.calories.llm;
+          const baseProtein = (item.nutrition.protein.final !== null && item.nutrition.protein.final !== undefined)
+            ? item.nutrition.protein.final
+            : item.nutrition.protein.llm;
+          const baseCarbs = (item.nutrition.carbs.final !== null && item.nutrition.carbs.final !== undefined)
+            ? item.nutrition.carbs.final
+            : item.nutrition.carbs.llm;
+          const baseFat = (item.nutrition.fat.final !== null && item.nutrition.fat.final !== undefined)
+            ? item.nutrition.fat.final
+            : item.nutrition.fat.llm;
+
           // Update final nutrition proportionally
-          item.nutrition.calories.final = parseFloat((item.nutrition.calories.llm * ratio).toFixed(2));
-          item.nutrition.protein.final = parseFloat((item.nutrition.protein.llm * ratio).toFixed(2));
-          item.nutrition.carbs.final = parseFloat((item.nutrition.carbs.llm * ratio).toFixed(2));
-          item.nutrition.fat.final = parseFloat((item.nutrition.fat.llm * ratio).toFixed(2));
+          const newCalories = parseFloat((baseCalories * ratio).toFixed(2));
+          const newProtein = parseFloat((baseProtein * ratio).toFixed(2));
+          const newCarbs = parseFloat((baseCarbs * ratio).toFixed(2));
+          const newFat = parseFloat((baseFat * ratio).toFixed(2));
+
+          // Track nutrition changes
+          changes.push(
+            { itemId, field: 'calories', previousValue: baseCalories, newValue: newCalories },
+            { itemId, field: 'protein', previousValue: baseProtein, newValue: newProtein },
+            { itemId, field: 'carbs', previousValue: baseCarbs, newValue: newCarbs },
+            { itemId, field: 'fat', previousValue: baseFat, newValue: newFat }
+          );
+
+          item.nutrition.calories.final = newCalories;
+          item.nutrition.protein.final = newProtein;
+          item.nutrition.carbs.final = newCarbs;
+          item.nutrition.fat.final = newFat;
         }
       }
 
       // Update meal name if AI changed it
-      if (aiResult && aiResult.mealNameChanged) {
+      if (aiResult && aiResult.mealNameChanged && aiResult.mealName !== meal.name) {
+        changes.push({
+          itemId: null, // Meal-level change
+          field: 'mealName',
+          previousValue: meal.name,
+          newValue: aiResult.mealName
+        });
         meal.name = aiResult.mealName;
       }
 
       // Recompute total nutrition
       const updatedMeal = await recomputeTotalNutrition(meal);
       await updatedMeal.save();
+
+      // Capture meal state AFTER changes for audit
+      const mealSnapshotAfter = createMealSnapshot(updatedMeal);
+
+      // Create audit entry (non-blocking)
+      MealEditAudit.create({
+        mealId: mealId,
+        userId: userId,
+        editType: 'BULK_UPDATE',
+        changes: changes,
+        mealSnapshot: {
+          before: mealSnapshotBefore,
+          after: mealSnapshotAfter
+        },
+        llmInput: llmInput,
+        llmOutput: llmOutput,
+        status: 'success'
+      }).catch(err => console.error('Failed to create audit entry:', err));
 
       // Format response
       const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
@@ -811,6 +943,304 @@ async function getUserAuditSummary(req, res) {
   }
 }
 
+/**
+ * Add an item to a meal
+ * POST /meals/:mealId/items
+ */
+async function addItemToMeal(req, res) {
+  parseBody(req, async (err, data) => {
+    if (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid request body' }));
+      return;
+    }
+
+    try {
+      const urlParts = req.url.split('/');
+      const mealId = urlParts[2]; // Extract mealId from /meals/:mealId/items
+      const userId = req.user.userId;
+
+      // Validate required fields - only name is required
+      if (!data.name) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'name is required' }));
+        return;
+      }
+
+      // Get the meal and verify ownership
+      const meal = await Meal.findOne({ _id: mealId, userId, deletedAt: null });
+      if (!meal) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Meal not found' }));
+        return;
+      }
+
+      // Capture meal state BEFORE changes for audit
+      const mealSnapshotBefore = createMealSnapshot(meal);
+
+      // Generate a unique ID for the new item
+      const newItemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Track changes and LLM data for audit
+      const changes = [];
+      let llmInput = null;
+      let llmOutput = null;
+      let itemName = data.name;
+      let quantity = data.quantity || { value: 1, unit: 'serving' };
+      let nutrition = data.nutrition;
+      let updatedMealName = meal.name;
+
+      // If nutrition is not provided, call Gemini to get it
+      if (!nutrition) {
+        try {
+          // Determine the unit to use for AI call
+          const originalUnit = quantity.unit || 'serving';
+          
+          // Call AI service to get nutrition information
+          const aiResult = await getNutritionForItem(data.name, meal.name, null, originalUnit);
+          
+          // Use AI-provided nutrition and quantity if not provided
+          nutrition = aiResult.nutrition;
+          if (!data.quantity) {
+            quantity = aiResult.quantity;
+          } else {
+            // Use provided quantity but keep AI's unit if quantity unit not provided
+            quantity = {
+              value: data.quantity.value || aiResult.quantity.value,
+              unit: data.quantity.unit || aiResult.quantity.unit
+            };
+          }
+          
+          // Update item name if AI provided a better one
+          itemName = aiResult.name || data.name;
+          
+          // Update meal name if AI suggests a better one
+          if (aiResult.updatedMealName) {
+            updatedMealName = aiResult.updatedMealName;
+            changes.push({
+              itemId: newItemId,
+              field: 'mealName',
+              previousValue: meal.name,
+              newValue: updatedMealName
+            });
+          }
+
+          // Store LLM input/output for audit
+          if (aiResult.auditData) {
+            llmInput = {
+              requestPayload: { 
+                itemName: data.name, 
+                currentMealName: meal.name, 
+                quantity: quantity 
+              },
+              promptSent: aiResult.auditData.promptSent,
+              provider: aiResult.auditData.provider,
+              model: aiResult.auditData.model
+            };
+            llmOutput = {
+              rawResponse: aiResult.auditData.rawResponse,
+              parsedResponse: aiResult.auditData.parsedResponse,
+              tokensUsed: aiResult.auditData.tokensUsed,
+              latencyMs: aiResult.auditData.latencyMs
+            };
+          }
+
+          // Track nutrition changes from AI
+          changes.push(
+            { itemId: newItemId, field: 'calories', previousValue: null, newValue: nutrition.calories },
+            { itemId: newItemId, field: 'protein', previousValue: null, newValue: nutrition.protein },
+            { itemId: newItemId, field: 'carbs', previousValue: null, newValue: nutrition.carbs },
+            { itemId: newItemId, field: 'fat', previousValue: null, newValue: nutrition.fat }
+          );
+        } catch (aiError) {
+          console.error('Error getting AI nutrition:', aiError);
+          // Fallback to default nutrition values if AI fails
+          nutrition = {
+            calories: 100,
+            protein: 5,
+            carbs: 15,
+            fat: 3
+          };
+        }
+      } else {
+        // Nutrition was provided, track the change
+        changes.push(
+          { itemId: newItemId, field: 'calories', previousValue: null, newValue: nutrition.calories || 0 },
+          { itemId: newItemId, field: 'protein', previousValue: null, newValue: nutrition.protein || 0 },
+          { itemId: newItemId, field: 'carbs', previousValue: null, newValue: nutrition.carbs || 0 },
+          { itemId: newItemId, field: 'fat', previousValue: null, newValue: nutrition.fat || 0 }
+        );
+      }
+
+      // Track name change
+      changes.push({
+        itemId: newItemId,
+        field: 'name',
+        previousValue: null,
+        newValue: itemName
+      });
+
+      // Create the new item
+      const newItem = {
+        id: newItemId,
+        name: {
+          llm: itemName,
+          final: itemName
+        },
+        quantity: {
+          llm: {
+            value: quantity.value,
+            unit: quantity.unit
+          },
+          final: {
+            value: quantity.value,
+            unit: quantity.unit
+          }
+        },
+        nutrition: {
+          calories: {
+            llm: nutrition.calories || 0,
+            final: nutrition.calories || 0
+          },
+          protein: {
+            llm: nutrition.protein || 0,
+            final: nutrition.protein || 0
+          },
+          carbs: {
+            llm: nutrition.carbs || 0,
+            final: nutrition.carbs || 0
+          },
+          fat: {
+            llm: nutrition.fat || 0,
+            final: nutrition.fat || 0
+          }
+        },
+        confidence: data.confidence || null
+      };
+
+      // Update meal name if AI suggested a change
+      if (updatedMealName !== meal.name) {
+        meal.name = updatedMealName;
+      }
+
+      // Add item to meal
+      meal.items.push(newItem);
+
+      // Recompute total nutrition
+      const updatedMeal = await recomputeTotalNutrition(meal);
+      await updatedMeal.save();
+
+      // Capture meal state AFTER changes for audit
+      const mealSnapshotAfter = createMealSnapshot(updatedMeal);
+
+      // Create audit entry (non-blocking)
+      MealEditAudit.create({
+        mealId: mealId,
+        userId: userId,
+        editType: 'ITEM_ADD',
+        changes: changes,
+        mealSnapshot: {
+          before: mealSnapshotBefore,
+          after: mealSnapshotAfter
+        },
+        llmInput: llmInput,
+        llmOutput: llmOutput,
+        status: 'success'
+      }).catch(err => console.error('Failed to create audit entry:', err));
+
+      // Format response according to new format
+      const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(formattedResponse));
+
+    } catch (error) {
+      console.error('Error adding item to meal:', error);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Failed to add item to meal', details: error.message }));
+    }
+  });
+}
+
+/**
+ * Delete an item from a meal
+ * DELETE /meals/:mealId/items/:itemId
+ */
+async function deleteItemFromMeal(req, res) {
+  try {
+    const urlParts = req.url.split('/');
+    const mealId = urlParts[2]; // Extract mealId from /meals/:mealId/items/:itemId
+    const itemId = urlParts[4]; // Extract itemId from /meals/:mealId/items/:itemId
+    const userId = req.user.userId;
+
+    if (!itemId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'itemId is required' }));
+      return;
+    }
+
+    // Get the meal and verify ownership
+    const meal = await Meal.findOne({ _id: mealId, userId, deletedAt: null });
+    if (!meal) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Meal not found' }));
+      return;
+    }
+
+    // Capture meal state BEFORE changes for audit
+    const mealSnapshotBefore = createMealSnapshot(meal);
+
+    // Find the item to delete
+    const itemIndex = meal.items.findIndex(item => item.id === itemId);
+    if (itemIndex === -1) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Item not found in meal' }));
+      return;
+    }
+
+    const itemToDelete = meal.items[itemIndex];
+
+    // Remove item from meal
+    meal.items.splice(itemIndex, 1);
+
+    // Recompute total nutrition
+    const updatedMeal = await recomputeTotalNutrition(meal);
+    await updatedMeal.save();
+
+    // Capture meal state AFTER changes for audit
+    const mealSnapshotAfter = createMealSnapshot(updatedMeal);
+
+    // Create audit entry (non-blocking)
+    MealEditAudit.create({
+      mealId: mealId,
+      userId: userId,
+      editType: 'ITEM_DELETE',
+      changes: [{
+        itemId: itemId,
+        field: 'name',
+        previousValue: itemToDelete.name.final || itemToDelete.name.llm,
+        newValue: null
+      }],
+      mealSnapshot: {
+        before: mealSnapshotBefore,
+        after: mealSnapshotAfter
+      },
+      llmInput: null,
+      llmOutput: null,
+      status: 'success'
+    }).catch(err => console.error('Failed to create audit entry:', err));
+
+    // Format response according to new format
+    const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(formattedResponse));
+
+  } catch (error) {
+    console.error('Error deleting item from meal:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to delete item from meal', details: error.message }));
+  }
+}
+
 module.exports = {
   createMeal,
   getMeals,
@@ -822,5 +1252,7 @@ module.exports = {
   getCalendarData,
   getMealAuditHistory,
   getAuditEntry,
-  getUserAuditSummary
+  getUserAuditSummary,
+  addItemToMeal,
+  deleteItemFromMeal
 }; 

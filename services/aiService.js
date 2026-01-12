@@ -209,6 +209,7 @@ Return only valid JSON, no additional text.`;
         }
       ],
       max_tokens: 1000,
+      temperature: 0.1,
       response_format: { type: "json_object" }
     });
     return completion.choices[0].message.content;
@@ -218,7 +219,12 @@ Return only valid JSON, no additional text.`;
     // Use gemini-2.5-flash as requested
     const modelName = 'gemini-2.5-flash';
     console.log(`🤖 [GEMINI] Using model: ${modelName}`);
-    const model = genAI.getGenerativeModel({ model: modelName });
+    const model = genAI.getGenerativeModel({ 
+      model: modelName,
+      generationConfig: {
+        temperature: 0.1
+      }
+    });
     
     // Build prompt based on what's available
     let prompt = '';
@@ -461,6 +467,7 @@ Return only valid JSON, no additional text.`;
         { role: 'user', content: userPrompt }
       ],
       max_tokens: 1000,
+      temperature: 0.1,
       response_format: { type: "json_object" }
     });
     
@@ -489,9 +496,52 @@ Return only valid JSON, no additional text.`;
     const startTime = Date.now();
     const modelName = 'gemini-2.5-flash';
     console.log(`🤖 [GEMINI] Using model: ${modelName} for item analysis`);
-    const model = genAI.getGenerativeModel({ model: modelName });
+    const model = genAI.getGenerativeModel({ 
+      model: modelName,
+      generationConfig: {
+        temperature: 0.1
+      }
+    });
     
-    const prompt = `A user is updating a meal item. Please provide nutrition information for the new item and suggest an updated meal name.
+    // Build prompt based on whether this is a new item or replacement
+    const isNewItem = !previousItemName || previousItemName === 'null' || previousItemName === '';
+    const prompt = isNewItem 
+      ? `A user is adding a new item to a meal. Please provide nutrition information for the item and suggest an updated meal name if appropriate.
+
+Current meal name: "${currentMealName}"
+New item name (that is being added): "${itemName}"
+Original quantity unit: "${originalUnit}"
+
+Return JSON with this structure:
+{
+  "name": "${itemName}",
+  "quantity": {
+    "value": 1,
+    "unit": "${originalUnit}"
+  },
+  "nutrition": {
+    "calories": 150,
+    "protein": 10,
+    "carbs": 20,
+    "fat": 5
+  },
+  "updatedMealName": "Updated meal name that includes the new item (if the meal name should change), otherwise keep the same meal name"
+}
+
+Guidelines:
+1. Provide realistic nutrition values for a typical serving of ${itemName} using the unit "${originalUnit}"
+2. For the updatedMealName, consider how adding "${itemName}" to "${currentMealName}" would change the overall meal description
+3. Keep the meal name concise but descriptive
+4. If adding the item doesn't significantly change the meal, you can keep the same meal name
+5. ALWAYS use the original unit "${originalUnit}" in the quantity field
+
+Examples:
+- Adding "Brown Rice" to "Chicken Bowl" → "Chicken and Brown Rice Bowl"
+- Adding "Banana" to "Fruit Salad" → "Fruit Salad with Banana"
+- Adding "Salad" to "Grilled Chicken" → "Grilled Chicken Salad"
+
+Return only valid JSON, no additional text.`
+      : `A user is updating a meal item. Please provide nutrition information for the new item and suggest an updated meal name.
 
 Current meal name: "${currentMealName}"
 Previous item name (that is being replaced): "${previousItemName}"
@@ -764,6 +814,16 @@ Return only valid JSON, no additional text.`;
   }
 
   static async batchUpdateFoodItems(items, currentMealName, shouldUpdateMealName, mainItemInfo) {
+    const startTime = Date.now();
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [GEMINI] Using model: ${modelName} for batch item update`);
+    const model = genAI.getGenerativeModel({ 
+      model: modelName,
+      generationConfig: {
+        temperature: 0.1
+      }
+    });
+
     const itemDescriptions = items.map((item, index) => 
       `${index + 1}. ${item.originalName} → ${item.newName} | ${item.newQuantity} ${item.unit} | Main: ${item.isMainItem ? 'Yes' : 'No'}`
     ).join('\n');
@@ -772,23 +832,16 @@ Return only valid JSON, no additional text.`;
       ? `Update meal name (main changed: ${mainItemInfo.originalName} → ${mainItemInfo.newName})`
       : `Keep meal name: "${currentMealName}"`;
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a world-class nutritionist and an expert in identifying food items, especially from diverse cuisines like Indian meals.`
-        },
-        {
-          role: 'user',
-          content: `Meal: "${currentMealName}"
+    const prompt = `You are a world-class nutritionist and an expert in identifying food items, especially from diverse cuisines like Indian meals.
+
+Meal: "${currentMealName}"
 
 Updated items:
 ${itemDescriptions}
 
 Action: ${mealNameInstruction}
 
-Return JSON:
+Return JSON with this structure:
 {
   "items": [
     {
@@ -809,14 +862,55 @@ Guidelines:
 • If main item changed: update meal name
 • If only minor items changed: keep original name
 
-Return only valid JSON.`
-        }
-      ],
-      max_tokens: 1000,
-      response_format: { type: "json_object" }
-    });
+Return only valid JSON, no additional text.`;
 
-    return JSON.parse(completion.choices[0].message.content);
+    try {
+      console.log(`🤖 [GEMINI] Sending batch update request`);
+      const result = await model.generateContent({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ]
+      });
+      
+      const latencyMs = Date.now() - startTime;
+      const responseText = result.response.text();
+      console.log(`🤖 [GEMINI] Batch update response received, length: ${responseText?.length || 0}`);
+      
+      if (!responseText || responseText.trim() === '') {
+        console.error('❌ [GEMINI] Empty response received for batch update');
+        throw new Error('Empty response from Gemini API');
+      }
+
+      // Parse JSON response
+      const parsedResult = JSON.parse(responseText);
+      
+      // Extract token usage from Gemini response
+      const usageMetadata = result.response.usageMetadata;
+
+      return {
+        ...parsedResult,
+        auditData: {
+          provider: 'gemini',
+          model: modelName,
+          promptSent: prompt,
+          rawResponse: responseText,
+          parsedResponse: parsedResult,
+          tokensUsed: {
+            input: usageMetadata?.promptTokenCount || null,
+            output: usageMetadata?.candidatesTokenCount || null,
+            total: usageMetadata?.totalTokenCount || null
+          },
+          latencyMs
+        }
+      };
+    } catch (error) {
+      console.error('❌ [GEMINI] API Error for batch update:', error.message);
+      console.error('❌ [GEMINI] Full error:', error);
+      throw error;
+    }
   }
 }
 

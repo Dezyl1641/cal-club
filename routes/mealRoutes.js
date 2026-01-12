@@ -28,8 +28,16 @@ function mealRoutes(req, res) {
 
   // If exact match not found, try to match parameterized routes
   if (!handler) {
+    // Check for /meals/:mealId/items pattern (add item to meal)
+    if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/items$/)) {
+      handler = mealController.addItemToMeal;
+    }
+    // Check for /meals/:mealId/items/:itemId pattern (delete item from meal)
+    else if (method === 'DELETE' && basePath.match(/^\/meals\/[^\/]+\/items\/[^\/]+$/)) {
+      handler = mealController.deleteItemFromMeal;
+    }
     // Check for /meals/:mealId/audit pattern (audit history for a meal)
-    if (method === 'GET' && basePath.match(/^\/meals\/[^\/]+\/audit$/)) {
+    else if (method === 'GET' && basePath.match(/^\/meals\/[^\/]+\/audit$/)) {
       handler = mealController.getMealAuditHistory;
     }
     // Check for /meals/audit/:auditId pattern (specific audit entry)
