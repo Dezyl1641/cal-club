@@ -858,7 +858,7 @@ function bulkEditItems(req, res) {
           newName: aiResult.mealName
         });
         changes.push({
-          itemId: null, // Meal-level change
+          // itemId omitted for meal-level changes
           field: 'mealName',
           previousValue: meal.name,
           newValue: aiResult.mealName

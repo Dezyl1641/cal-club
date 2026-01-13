@@ -6,7 +6,10 @@ const mongoose = require('mongoose');
 const changeSchema = new mongoose.Schema({
   itemId: {
     type: String,
-    required: true
+    required: function() {
+      // itemId is required for item-level changes, but optional for meal-level changes (mealName)
+      return this.field !== 'mealName';
+    }
   },
   field: {
     type: String,
