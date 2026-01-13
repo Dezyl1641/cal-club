@@ -580,6 +580,11 @@ function bulkEditItems(req, res) {
       const mealSnapshotBefore = createMealSnapshot(meal);
       console.log('📝 [BULK_EDIT] Captured meal snapshot before changes');
 
+      // TODO: Frontend workaround - Remove this flag when frontend correctly omits newItem for quantity-only updates
+      // When true: If newItem equals old item name, treat as quantity-only update (skip LLM call)
+      // When false: Normal behavior - newItem always triggers LLM call
+      const TREAT_SAME_ITEM_AS_QUANTITY_ONLY = true;
+
       // Track changes for audit
       const changes = [];
       let llmInput = null;
@@ -614,18 +619,44 @@ function bulkEditItems(req, res) {
         }
 
         const item = meal.items[itemIndex];
-        itemUpdates.set(itemId, { itemIndex, newQuantity, newItem, originalItem: item });
+        const currentItemName = item.name?.llm || item.name?.final || '';
+        
+        // Frontend workaround: Check if newItem is same as current item name
+        let shouldTreatAsQuantityOnly = false;
+        if (TREAT_SAME_ITEM_AS_QUANTITY_ONLY && newItem) {
+          const normalizedNewItem = newItem.trim().toLowerCase();
+          const normalizedCurrentName = currentItemName.trim().toLowerCase();
+          shouldTreatAsQuantityOnly = normalizedNewItem === normalizedCurrentName;
+          
+          if (shouldTreatAsQuantityOnly) {
+            console.log('⚠️ [BULK_EDIT] Frontend workaround: newItem matches current name, treating as quantity-only update:', {
+              itemId,
+              currentName: currentItemName,
+              newItem,
+              reason: 'Frontend sending same item name for quantity-only updates'
+            });
+          }
+        }
+
+        // Store the update data (keep newItem in map for consistency, but we'll skip AI call if it's same)
+        itemUpdates.set(itemId, { 
+          itemIndex, 
+          newQuantity, 
+          newItem: shouldTreatAsQuantityOnly ? undefined : newItem, // Clear newItem if treating as quantity-only
+          originalItem: item 
+        });
 
         console.log('📝 [BULK_EDIT] Processing item update:', {
           itemId,
-          currentName: item.name?.llm || item.name?.final,
+          currentName: currentItemName,
           currentQuantity: item.quantity?.llm?.value || item.quantity?.final?.value,
           newItem,
-          newQuantity
+          newQuantity,
+          treatingAsQuantityOnly: shouldTreatAsQuantityOnly
         });
 
-        // Only add to batch if newItem is provided (name change)
-        if (newItem) {
+        // Only add to batch if newItem is provided AND it's actually different (name change)
+        if (newItem && !shouldTreatAsQuantityOnly) {
           const isMainItem = isMainFoodItem(item.name.llm);
           
           batchItems.push({
@@ -650,6 +681,8 @@ function bulkEditItems(req, res) {
             };
             console.log('📝 [BULK_EDIT] Main item change detected:', mainItemInfo);
           }
+        } else if (shouldTreatAsQuantityOnly) {
+          console.log('📝 [BULK_EDIT] Skipping AI call - same item name detected (quantity-only update)');
         }
       }
 
