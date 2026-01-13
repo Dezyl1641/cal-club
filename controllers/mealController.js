@@ -546,6 +546,8 @@ function bulkEditItems(req, res) {
         }))
       });
 
+      console.log('📝 [BULK_EDIT] Request data object:' + JSON.stringify(data));
+
       if (!mealId || !items || !Array.isArray(items) || items.length === 0) {
         console.error('❌ [BULK_EDIT] Validation failed: missing mealId or items array');
         res.writeHead(400, { 'Content-Type': 'application/json' });
