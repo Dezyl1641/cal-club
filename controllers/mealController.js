@@ -520,8 +520,12 @@ async function getNutritionForItem(newItemName, currentMealName, previousItemNam
 }
 
 function bulkEditItems(req, res) {
+  const bulkEditStartTime = Date.now();
+  console.log('📝 [BULK_EDIT] Starting bulk edit request');
+  
   parseBody(req, async (err, data) => {
     if (err) {
+      console.error('❌ [BULK_EDIT] Failed to parse request body:', err.message);
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid request body' }));
       return;
@@ -531,22 +535,48 @@ function bulkEditItems(req, res) {
       const { mealId, items } = data;
       const userId = req.user.userId;
 
+      console.log('📝 [BULK_EDIT] Request data:', {
+        mealId,
+        userId,
+        itemsCount: items?.length || 0,
+        items: items?.map(item => ({
+          itemId: item.itemId,
+          hasNewItem: !!item.newItem,
+          hasNewQuantity: item.newQuantity !== null && item.newQuantity !== undefined
+        }))
+      });
+
       if (!mealId || !items || !Array.isArray(items) || items.length === 0) {
+        console.error('❌ [BULK_EDIT] Validation failed: missing mealId or items array');
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'mealId and items array are required' }));
         return;
       }
 
       // Fetch the meal
+      console.log('📝 [BULK_EDIT] Fetching meal:', { mealId, userId });
       const meal = await Meal.findOne({ _id: mealId, userId, deletedAt: null });
       if (!meal) {
+        console.error('❌ [BULK_EDIT] Meal not found:', { mealId, userId });
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Meal not found' }));
         return;
       }
 
+      console.log('✅ [BULK_EDIT] Meal found:', {
+        mealId: meal._id,
+        mealName: meal.name,
+        currentItemsCount: meal.items?.length || 0,
+        currentItems: meal.items?.map(item => ({
+          id: item.id,
+          name: item.name?.llm || item.name?.final,
+          quantity: item.quantity?.llm?.value || item.quantity?.final?.value
+        }))
+      });
+
       // Capture meal state BEFORE any changes for audit
       const mealSnapshotBefore = createMealSnapshot(meal);
+      console.log('📝 [BULK_EDIT] Captured meal snapshot before changes');
 
       // Track changes for audit
       const changes = [];
@@ -559,11 +589,14 @@ function bulkEditItems(req, res) {
       let hasMainItemChange = false;
       let mainItemInfo = null;
 
+      console.log('📝 [BULK_EDIT] Processing item updates, count:', items.length);
+
       // Process each item update request
       for (const itemUpdate of items) {
         const { itemId, newQuantity, newItem } = itemUpdate;
 
         if (!itemId) {
+          console.error('❌ [BULK_EDIT] Missing itemId in update request:', itemUpdate);
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Each item must have an itemId' }));
           return;
@@ -572,6 +605,7 @@ function bulkEditItems(req, res) {
         // Find the item in the meal
         const itemIndex = meal.items.findIndex(item => item.id === itemId);
         if (itemIndex === -1) {
+          console.error('❌ [BULK_EDIT] Item not found in meal:', { itemId, mealId });
           res.writeHead(404, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: `Item with id ${itemId} not found in meal` }));
           return;
@@ -579,6 +613,14 @@ function bulkEditItems(req, res) {
 
         const item = meal.items[itemIndex];
         itemUpdates.set(itemId, { itemIndex, newQuantity, newItem, originalItem: item });
+
+        console.log('📝 [BULK_EDIT] Processing item update:', {
+          itemId,
+          currentName: item.name?.llm || item.name?.final,
+          currentQuantity: item.quantity?.llm?.value || item.quantity?.final?.value,
+          newItem,
+          newQuantity
+        });
 
         // Only add to batch if newItem is provided (name change)
         if (newItem) {
@@ -592,25 +634,62 @@ function bulkEditItems(req, res) {
             isMainItem
           });
 
+          console.log('📝 [BULK_EDIT] Added to batch AI call:', {
+            originalName: item.name.llm,
+            newName: newItem,
+            isMainItem
+          });
+
           if (isMainItem) {
             hasMainItemChange = true;
             mainItemInfo = {
               originalName: item.name.llm,
               newName: newItem
             };
+            console.log('📝 [BULK_EDIT] Main item change detected:', mainItemInfo);
           }
         }
       }
 
+      console.log('📝 [BULK_EDIT] Batch processing summary:', {
+        totalItemsToUpdate: itemUpdates.size,
+        itemsRequiringAI: batchItems.length,
+        hasMainItemChange,
+        batchItems: batchItems.map(bi => ({
+          originalName: bi.originalName,
+          newName: bi.newName,
+          isMainItem: bi.isMainItem
+        }))
+      });
+
       // Make single AI call if there are any item name changes
       let aiResult = null;
       if (batchItems.length > 0) {
+        console.log('🤖 [BULK_EDIT] Calling AI service for batch update:', {
+          itemsCount: batchItems.length,
+          currentMealName: meal.name,
+          shouldUpdateMealName: hasMainItemChange,
+          mainItemInfo
+        });
+        
+        const aiCallStartTime = Date.now();
         aiResult = await AiService.batchUpdateFoodItems(
           batchItems,
           meal.name,
           hasMainItemChange,
           mainItemInfo
         );
+        const aiCallDuration = Date.now() - aiCallStartTime;
+
+        console.log('✅ [BULK_EDIT] AI service response received:', {
+          durationMs: aiCallDuration,
+          itemsReturned: aiResult?.items?.length || 0,
+          mealNameChanged: aiResult?.mealNameChanged || false,
+          newMealName: aiResult?.mealName,
+          hasAuditData: !!aiResult?.auditData,
+          tokensUsed: aiResult?.auditData?.tokensUsed,
+          latencyMs: aiResult?.auditData?.latencyMs
+        });
 
         // Store LLM input/output for audit
         if (aiResult.auditData) {
@@ -632,9 +711,12 @@ function bulkEditItems(req, res) {
             latencyMs: aiResult.auditData.latencyMs
           };
         }
+      } else {
+        console.log('📝 [BULK_EDIT] Skipping AI call - no item name changes, only quantity updates');
       }
 
       // Apply updates to each item and track changes
+      console.log('📝 [BULK_EDIT] Applying updates to items, total:', itemUpdates.size);
       let aiItemIndex = 0;
       for (const [itemId, updateData] of itemUpdates) {
         const { itemIndex, newQuantity, newItem, originalItem } = updateData;
@@ -643,6 +725,13 @@ function bulkEditItems(req, res) {
         if (newItem && aiResult) {
           // Case: Item name changed - use AI result
           const aiItem = aiResult.items[aiItemIndex];
+          console.log('📝 [BULK_EDIT] Applying AI result to item:', {
+            itemId,
+            aiItemIndex,
+            originalName: item.name.llm,
+            newName: aiItem.name,
+            aiNutrition: aiItem.nutrition
+          });
           aiItemIndex++;
 
           // Track name change
@@ -700,6 +789,17 @@ function bulkEditItems(req, res) {
             ? item.quantity.final.value
             : item.quantity.llm.value;
           const ratio = newQuantity / oldQuantity;
+          
+          console.log('📝 [BULK_EDIT] Applying quantity-only update:', {
+            itemId,
+            oldQuantity,
+            newQuantity,
+            ratio,
+            currentNutrition: {
+              calories: item.nutrition.calories.final || item.nutrition.calories.llm,
+              protein: item.nutrition.protein.final || item.nutrition.protein.llm
+            }
+          });
 
           // Track quantity change
           changes.push({
@@ -753,6 +853,10 @@ function bulkEditItems(req, res) {
 
       // Update meal name if AI changed it
       if (aiResult && aiResult.mealNameChanged && aiResult.mealName !== meal.name) {
+        console.log('📝 [BULK_EDIT] Updating meal name:', {
+          previousName: meal.name,
+          newName: aiResult.mealName
+        });
         changes.push({
           itemId: null, // Meal-level change
           field: 'mealName',
@@ -763,13 +867,27 @@ function bulkEditItems(req, res) {
       }
 
       // Recompute total nutrition
+      console.log('📝 [BULK_EDIT] Recomputing total nutrition');
+      const recomputeStartTime = Date.now();
       const updatedMeal = await recomputeTotalNutrition(meal);
       await updatedMeal.save();
+      const recomputeDuration = Date.now() - recomputeStartTime;
+      console.log('✅ [BULK_EDIT] Total nutrition recomputed and saved:', {
+        durationMs: recomputeDuration,
+        totalCalories: updatedMeal.totalNutrition?.calories,
+        totalProtein: updatedMeal.totalNutrition?.protein
+      });
 
       // Capture meal state AFTER changes for audit
       const mealSnapshotAfter = createMealSnapshot(updatedMeal);
+      console.log('📝 [BULK_EDIT] Captured meal snapshot after changes');
 
       // Create audit entry (non-blocking)
+      console.log('📝 [BULK_EDIT] Creating audit entry:', {
+        changesCount: changes.length,
+        hasLlmInput: !!llmInput,
+        hasLlmOutput: !!llmOutput
+      });
       MealEditAudit.create({
         mealId: mealId,
         userId: userId,
@@ -782,15 +900,31 @@ function bulkEditItems(req, res) {
         llmInput: llmInput,
         llmOutput: llmOutput,
         status: 'success'
-      }).catch(err => console.error('Failed to create audit entry:', err));
+      }).catch(err => console.error('❌ [BULK_EDIT] Failed to create audit entry:', err));
 
       // Format response
+      const totalDuration = Date.now() - bulkEditStartTime;
+      console.log('✅ [BULK_EDIT] Bulk edit completed successfully:', {
+        totalDurationMs: totalDuration,
+        itemsUpdated: itemUpdates.size,
+        changesCount: changes.length,
+        mealId,
+        userId
+      });
+      
       const formattedResponse = mealFormatter.formatMealResponse(updatedMeal);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(formattedResponse));
 
     } catch (error) {
-      console.error('Error in bulkEditItems:', error);
+      const totalDuration = Date.now() - bulkEditStartTime;
+      console.error('❌ [BULK_EDIT] Error in bulkEditItems:', {
+        error: error.message,
+        stack: error.stack,
+        durationMs: totalDuration,
+        mealId: data?.mealId,
+        userId: req.user?.userId
+      });
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to bulk edit items', details: error.message }));
     }

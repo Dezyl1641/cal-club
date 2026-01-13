@@ -884,8 +884,42 @@ Return only valid JSON, no additional text.`;
         throw new Error('Empty response from Gemini API');
       }
 
+      // Clean markdown code blocks if present
+      let cleanResponse = responseText;
+      const hadMarkdown = responseText.includes('```json') || responseText.includes('```');
+      if (responseText.includes('```json')) {
+        console.log('📝 [GEMINI] Detected markdown code block (```json), cleaning...');
+        cleanResponse = responseText.split('```json')[1].split('```')[0].trim();
+        console.log(`📝 [GEMINI] Cleaned response length: ${cleanResponse.length}, original: ${responseText.length}`);
+      } else if (responseText.includes('```')) {
+        console.log('📝 [GEMINI] Detected markdown code block (```), cleaning...');
+        cleanResponse = responseText.split('```')[1].split('```')[0].trim();
+        console.log(`📝 [GEMINI] Cleaned response length: ${cleanResponse.length}, original: ${responseText.length}`);
+      } else {
+        console.log('📝 [GEMINI] No markdown code blocks detected, using response as-is');
+      }
+
+      // Log first 200 chars of cleaned response for debugging
+      console.log(`📝 [GEMINI] Cleaned response preview: ${cleanResponse.substring(0, 200)}${cleanResponse.length > 200 ? '...' : ''}`);
+
       // Parse JSON response
-      const parsedResult = JSON.parse(responseText);
+      let parsedResult;
+      try {
+        parsedResult = JSON.parse(cleanResponse);
+        console.log('✅ [GEMINI] Successfully parsed JSON response:', {
+          itemsCount: parsedResult?.items?.length || 0,
+          mealName: parsedResult?.mealName,
+          mealNameChanged: parsedResult?.mealNameChanged
+        });
+      } catch (parseError) {
+        console.error('❌ [GEMINI] JSON parse error:', {
+          error: parseError.message,
+          hadMarkdown,
+          responseLength: cleanResponse.length,
+          responsePreview: cleanResponse.substring(0, 500)
+        });
+        throw new Error(`Failed to parse AI response as JSON: ${parseError.message}`);
+      }
       
       // Extract token usage from Gemini response
       const usageMetadata = result.response.usageMetadata;
