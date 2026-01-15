@@ -242,35 +242,50 @@ You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to a
 ### INSTRUCTIONS
 
 1. *Visual Analysis & Scale Calibration:*
-   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (forks ~20cm), glassware, or standard dinner plates (25-28cm). Use these to estimate the actual volume of the food.
+   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (spoons ~14-16cm), glassware, or standard dinner plates (25-28cm), or standard food item sizes. Use these to estimate the actual volume of the food.
    * *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils/butters/glazes. You must account for these "hidden calories" in your macro estimation.
 
 2. *Item Identification & Context Integration:*
    * *Identify All Items:* Segment the image and identify every distinct food item visible on the plate.
+   * *Be Specific:* Don't be generic in identifying items as calorie values differ (e.g., "bread" vs "sourdough bread").
    * *Context Usage:* Use the *User Hint* to resolve specific ambiguities (e.g., "made with oat milk" vs "cow milk").
-   * *Conflict Resolution:* If the User Hint contradicts strong visual evidence (e.g., User says "Salad" but image shows "Pizza"), *prioritize the Visual Evidence* for identification to prevent false tracking.
+   * *Conflict Resolution:* If the User Hint contradicts strong visual evidence (e.g., User says "Salad" but image shows "Pizza"), *prioritize the User Hint* for identification to prevent false tracking.
 
-3. *Scientific Calculation (Cooked vs. Raw):*
+3. *Component Breakdown for Composite Dishes:*
+   * *When to Apply:* For named composite dishes where items are cooked/mixed together (e.g., Biryani, Curry with protein, Pasta dishes), break into key components.
+   * *Format:* List each component separately as: "Component (dish name)". Example: "Chicken (chicken biryani)" and "Rice (chicken biryani)".
+   * *Key Components Only:* Separate base carb + protein + sauce/gravy (if substantial). Do NOT break curry/sauce into micro-ingredients (tomato, onion, spices).
+   * *When NOT to Apply:* If items are already visually distinct/separate on plate (e.g., Thali), list without parentheses: "Rice", "Dal", "Sabzi".
+
+4. *Scientific Calculation (Cooked vs. Raw):*
    * *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
    * *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
    * *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3x) before calculating macros.
 
-4. *Quantification (User-Friendly):*
-   * Estimate portion sizes using volume-based, user-friendly terms.
-   * Preferred Units: Cups, tablespoons, slices, pieces, "fist-sized", "palm-sized".
-   * Avoid giving specific gram weights unless the user provided them, as visual weight estimation is prone to error.
+5. *Quantification (User-Friendly & Editable):*
+   * For PROTEINS (meat, fish, paneer, tofu, eggs): Use format "[count] [unit] ([grams])"
+     - Examples: "3 pieces (150 gms)", "1 breast (180 gms)", "8 cubes (100 gms)", "6 shrimp (120 gms)"
+     - For non-countable proteins: "150 gms minced", "120 gms shredded"
+   * For CARBS: Use countable (pieces, slices) or volume (cups, katoris)
+     - Examples: "2 pieces" (roti), "1.5 cups" (rice), "3 slices" (bread)
+   * For VEGETABLES: Use countable (florets, pieces) or volume (katoris, cups)
+     - Examples: "6 florets" (broccoli), "1 katori" (sabzi), "1/2 cup" (salad)
+   * For SAUCES/GRAVIES: Use volume (katoris, cups, tbsp)
+     - Examples: "1 katori" (curry gravy), "3 tbsp" (dressing)
+   * AVOID vague descriptions: No "palm-sized", "fist-sized", "deck of cards", "tennis ball sized", or any comparison-based measurements
+   * All quantities must be concrete, measurable, and editable by the user
 
 ### OUTPUT FORMAT
 Return ONLY a raw JSON object with this exact structure:
 
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Grilled Chicken Breast')",
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Chicken Biryani')",
   "items": [
     {
       "name": "Item Name (e.g., Grilled Chicken Breast)",
       "quantity": {
         "value": 1,
-        "unit": "palm-sized piece/cups/slices/pieces/etc"
+        "unit": "breast (180 gms)/cups/pieces/katori/etc"
       },
       "nutrition": {
         "calories": 0,
@@ -297,33 +312,48 @@ You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to a
 ### INSTRUCTIONS
 
 1. *Visual Analysis & Scale Calibration:*
-   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (forks ~20cm), glassware, or standard dinner plates (25-28cm). Use these to estimate the actual volume of the food.
+   * *Identify Anchors:* Scan the image for "intrinsic" reference objects to determine physical scale. Look for standard cutlery (spoons ~14-16cm), glassware, or standard dinner plates (25-28cm), or standard food item sizes. Use these to estimate the actual volume of the food.
    * *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils/butters/glazes. You must account for these "hidden calories" in your macro estimation.
 
 2. *Item Identification:*
    * *Identify All Items:* Segment the image and identify every distinct food item visible on the plate.
+   * *Be Specific:* Don't be generic in identifying items as calorie values differ (e.g., "bread" vs "sourdough bread").
 
-3. *Scientific Calculation (Cooked vs. Raw):*
+3. *Component Breakdown for Composite Dishes:*
+   * *When to Apply:* For named composite dishes where items are cooked/mixed together (e.g., Biryani, Curry with protein, Pasta dishes), break into key components.
+   * *Format:* List each component separately as: "Component (dish name)". Example: "Chicken (chicken biryani)" and "Rice (chicken biryani)".
+   * *Key Components Only:* Separate base carb + protein + sauce/gravy (if substantial). Do NOT break curry/sauce into micro-ingredients (tomato, onion, spices).
+   * *When NOT to Apply:* If items are already visually distinct/separate on plate (e.g., Thali), list without parentheses: "Rice", "Dal", "Sabzi".
+
+4. *Scientific Calculation (Cooked vs. Raw):*
    * *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
    * *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
    * *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3x) before calculating macros.
 
-4. *Quantification (User-Friendly):*
-   * Estimate portion sizes using volume-based, user-friendly terms.
-   * Preferred Units: Cups, tablespoons, slices, pieces, "fist-sized", "palm-sized".
-   * Avoid giving specific gram weights as visual weight estimation is prone to error.
+5. *Quantification (User-Friendly & Editable):*
+   * For PROTEINS (meat, fish, paneer, tofu, eggs): Use format "[count] [unit] ([grams])"
+     - Examples: "3 pieces (150 gms)", "1 breast (180 gms)", "8 cubes (100 gms)", "6 shrimp (120 gms)"
+     - For non-countable proteins: "150 gms minced", "120 gms shredded"
+   * For CARBS: Use countable (pieces, slices) or volume (cups, katoris)
+     - Examples: "2 pieces" (roti), "1.5 cups" (rice), "3 slices" (bread)
+   * For VEGETABLES: Use countable (florets, pieces) or volume (katoris, cups)
+     - Examples: "6 florets" (broccoli), "1 katori" (sabzi), "1/2 cup" (salad)
+   * For SAUCES/GRAVIES: Use volume (katoris, cups, tbsp)
+     - Examples: "1 katori" (curry gravy), "3 tbsp" (dressing)
+   * AVOID vague descriptions: No "palm-sized", "fist-sized", "deck of cards", "tennis ball sized", or any comparison-based measurements
+   * All quantities must be concrete, measurable, and editable by the user
 
 ### OUTPUT FORMAT
 Return ONLY a raw JSON object with this exact structure:
 
 {
-  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Grilled Chicken Breast')",
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Chicken Biryani')",
   "items": [
     {
       "name": "Item Name (e.g., Grilled Chicken Breast)",
       "quantity": {
         "value": 1,
-        "unit": "palm-sized piece/cups/slices/pieces/etc"
+        "unit": "breast (180 gms)/cups/pieces/katori/etc"
       },
       "nutrition": {
         "calories": 0,
@@ -725,9 +755,10 @@ Return only valid JSON, no additional text.`;
         });
       }
 
+      const dateUtils = require('../utils/dateUtils');
       const mealData = {
         userId,
-        capturedAt: additionalData.capturedAt || new Date(),
+        capturedAt: additionalData.capturedAt ? new Date(additionalData.capturedAt) : dateUtils.getCurrentDateInIST(),
         photos: photos,
         llmVersion: '1.0',
         llmModel,

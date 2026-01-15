@@ -1,6 +1,7 @@
 const AiService = require('../services/aiService');
 const parseBody = require('../utils/parseBody');
 const mealFormatter = require('../utils/mealFormatter');
+const dateUtils = require('../utils/dateUtils');
 
 function foodCalories(req, res) {
   parseBody(req, async (err, data) => {
@@ -12,7 +13,7 @@ function foodCalories(req, res) {
 
     const provider = data.provider || 'openai';
     const additionalData = {
-      capturedAt: data.capturedAt ? new Date(data.capturedAt) : new Date(),
+      capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateInIST(),
       width: data.width || null,
       height: data.height || null,
       notes: data.notes || ''
