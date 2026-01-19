@@ -93,12 +93,39 @@ class AppFormatService {
         dailyFats: 65
       };
       
-      // Parse the date to get current day info
-      const currentDate = new Date(date);
-      const currentDayOfWeek = currentDate.getDay();
+      // Parse the date in IST context
+      // If date is a string (YYYY-MM-DD), treat it as IST date
+      let currentDate;
+      if (typeof date === 'string') {
+        const [year, month, day] = date.split('-').map(Number);
+        // Create date at noon IST to avoid timezone edge cases
+        // IST is UTC+5:30, so noon IST = 06:30 UTC
+        currentDate = new Date(Date.UTC(year, month - 1, day, 6, 30, 0, 0));
+      } else {
+        currentDate = new Date(date);
+      }
+      
+      // Get day of week in IST
+      const istFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'short'
+      });
+      const istDateStr = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(currentDate);
+      
+      // Parse IST date to get day of week
+      const [year, month, day] = istDateStr.split('-').map(Number);
+      const istDate = new Date(Date.UTC(year, month - 1, day, 6, 30, 0, 0));
+      const currentDayOfWeek = istDate.getUTCDay();
       const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
-      const mondayDate = new Date(currentDate);
-      mondayDate.setDate(mondayDate.getDate() - daysToMonday);
+      
+      // Calculate Monday in IST
+      const mondayDate = new Date(istDate);
+      mondayDate.setUTCDate(mondayDate.getUTCDate() - daysToMonday);
       
       // Calculate today's nutrition totals
       const todayData = this.getTodayNutritionData(calendarData, currentDate);
@@ -137,15 +164,34 @@ class AppFormatService {
     const days = [];
     const dayLetters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     
+    // Format current date in IST for comparison
+    const currentDateIST = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(currentDate);
+    
     for (let i = 0; i < 7; i++) {
+      // Calculate day date in IST
       const dayDate = new Date(mondayDate);
-      dayDate.setDate(dayDate.getDate() + i);
+      dayDate.setUTCDate(dayDate.getUTCDate() + i);
       
-      const isSelected = this.isSameDay(dayDate, currentDate);
+      // Format day date in IST
+      const dayDateIST = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).format(dayDate);
+      
+      // Get day number in IST
+      const dayNumber = parseInt(dayDateIST.split('-')[2]);
+      const isSelected = dayDateIST === currentDateIST;
       
       days.push({
         dayLetter: dayLetters[i],
-        date: dayDate.getDate(),
+        date: dayNumber,
         isSelected: isSelected
       });
     }
@@ -345,25 +391,52 @@ class AppFormatService {
   }
 
   static formatDateString(date) {
-    // Use local time instead of UTC to avoid timezone issues
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // Format date in IST timezone
+    const d = new Date(date);
+    const istFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return istFormatter.format(d);
   }
 
   static formatTime(date) {
+    // Format time in IST timezone
     const d = new Date(date);
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const ampm = hours >= 12 ? 'pm' : 'am';
-    const displayHours = hours % 12 || 12;
-    const displayMinutes = minutes.toString().padStart(2, '0');
-    return `${displayHours}:${displayMinutes}${ampm}`;
+    const istFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+    
+    const parts = istFormatter.formatToParts(d);
+    const hour = parseInt(parts.find(p => p.type === 'hour').value);
+    const minute = parts.find(p => p.type === 'minute').value;
+    const dayPeriod = parts.find(p => p.type === 'dayPeriod')?.value || '';
+    
+    return `${hour}:${minute}${dayPeriod}`;
   }
 
   static isSameDay(date1, date2) {
-    return date1.toDateString() === date2.toDateString();
+    // Compare dates in IST timezone
+    const date1IST = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date1);
+    
+    const date2IST = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date2);
+    
+    return date1IST === date2IST;
   }
 
   /**

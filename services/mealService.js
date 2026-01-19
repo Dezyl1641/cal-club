@@ -16,12 +16,15 @@ class MealService {
     let dateFilter = {};
     
     if (date) {
-      // Single day filter - handle local timezone properly
+      // Single day filter - treat date as IST date
+      // IST is UTC+5:30, so IST midnight (00:00 IST) = 18:30 UTC previous day
       const [year, month, day] = date.split('-').map(Number);
-      const startDate = new Date(year, month - 1, day, 0, 0, 0, 0); // Local midnight
-      const endDate = new Date(year, month - 1, day + 1, 0, 0, 0, 0); // Next day local midnight
+      // Start: YYYY-MM-DD 00:00:00 IST = YYYY-MM-(DD-1) 18:30:00 UTC
+      const startDate = new Date(Date.UTC(year, month - 1, day - 1, 18, 30, 0, 0));
+      // End: YYYY-MM-(DD+1) 00:00:00 IST = YYYY-MM-DD 18:30:00 UTC
+      const endDate = new Date(Date.UTC(year, month - 1, day, 18, 30, 0, 0));
       
-      console.log(`[Timezone Debug] Date filter - Date: ${date}, Start: ${startDate.toISOString()}, End: ${endDate.toISOString()}`);
+      console.log(`[Timezone Debug] Date filter (IST) - Date: ${date}, Start: ${startDate.toISOString()}, End: ${endDate.toISOString()}`);
       
       dateFilter = {
         capturedAt: {
@@ -30,10 +33,17 @@ class MealService {
         }
       };
     } else if (from || to) {
-      // Date range filter
+      // Date range filter - treat as IST dates
       dateFilter = {};
-      if (from) dateFilter.$gte = new Date(from);
-      if (to) dateFilter.$lt = new Date(to);
+      if (from) {
+        const [year, month, day] = from.split('-').map(Number);
+        dateFilter.$gte = new Date(Date.UTC(year, month - 1, day - 1, 18, 30, 0, 0));
+      }
+      if (to) {
+        const [year, month, day] = to.split('-').map(Number);
+        // End date should be exclusive, so use next day's IST midnight
+        dateFilter.$lt = new Date(Date.UTC(year, month - 1, day, 18, 30, 0, 0));
+      }
     }
 
     return Meal.find({
@@ -155,34 +165,67 @@ class MealService {
   }
 
   static async getCalendarData(userId, date) {
-    // Parse the given date and calculate Monday-Sunday week
-    // Handle date string properly to avoid timezone issues
+    // Parse the given date in IST context
     let givenDate;
     if (typeof date === 'string') {
       const [year, month, day] = date.split('-').map(Number);
-      givenDate = new Date(year, month - 1, day, 12, 0, 0, 0); // Use noon to avoid timezone edge cases
+      // Create date at noon IST (06:30 UTC) to avoid timezone edge cases
+      givenDate = new Date(Date.UTC(year, month - 1, day, 6, 30, 0, 0));
     } else {
       givenDate = new Date(date);
     }
     
-    // Calculate Monday of the week (0 = Sunday, 1 = Monday, etc.)
-    const dayOfWeek = givenDate.getDay();
+    // Get day of week in IST
+    const istDateStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(givenDate);
+    
+    const [year, month, day] = istDateStr.split('-').map(Number);
+    const istDate = new Date(Date.UTC(year, month - 1, day, 6, 30, 0, 0));
+    const dayOfWeek = istDate.getUTCDay();
     const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // If Sunday, go back 6 days
     
-    const startDate = new Date(givenDate);
-    startDate.setDate(startDate.getDate() - daysToMonday); // Go back to Monday
-    startDate.setHours(0, 0, 0, 0); // Set to local midnight
+    // Calculate Monday of the week in IST
+    const mondayIST = new Date(istDate);
+    mondayIST.setUTCDate(mondayIST.getUTCDate() - daysToMonday);
     
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 7); // Add 7 days to get end of week (next Monday)
-    endDate.setHours(0, 0, 0, 0); // Set to local midnight
+    // Get Monday date components in IST
+    const mondayISTStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(mondayIST);
+    
+    const [mondayYear, mondayMonth, mondayDay] = mondayISTStr.split('-').map(Number);
+    
+    // Convert IST midnight boundaries to UTC for MongoDB query
+    // IST midnight (00:00 IST) = 18:30 previous day UTC
+    // Monday IST midnight = (Monday - 1 day) 18:30 UTC
+    const startDateUTC = new Date(Date.UTC(mondayYear, mondayMonth - 1, mondayDay - 1, 18, 30, 0, 0));
+    
+    // End date: next Monday IST midnight
+    // Calculate next Monday date first
+    const nextMondayIST = new Date(mondayIST);
+    nextMondayIST.setUTCDate(nextMondayIST.getUTCDate() + 7);
+    const nextMondayISTStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(nextMondayIST);
+    const [nextMondayYear, nextMondayMonth, nextMondayDay] = nextMondayISTStr.split('-').map(Number);
+    const endDateUTC = new Date(Date.UTC(nextMondayYear, nextMondayMonth - 1, nextMondayDay - 1, 18, 30, 0, 0));
 
     return Meal.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           deletedAt: null,
-          capturedAt: { $gte: startDate, $lt: endDate }
+          capturedAt: { $gte: startDateUTC, $lt: endDateUTC }
         }
       },
       {
@@ -190,7 +233,8 @@ class MealService {
           date: {
             $dateToString: {
               format: "%Y-%m-%d",
-              date: "$capturedAt"
+              date: "$capturedAt",
+              timezone: "Asia/Kolkata"
             }
           },
           effectiveCalories: {

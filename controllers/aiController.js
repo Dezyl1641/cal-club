@@ -11,8 +11,8 @@ function foodCalories(req, res) {
       return;
     }
 
-    const provider = data.provider || 'openai';
-    const additionalData = {
+    const provider = 'gemini' // hardcoding to gemini for now
+    const additionalData = {  
       capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateInIST(),
       width: data.width || null,
       height: data.height || null,

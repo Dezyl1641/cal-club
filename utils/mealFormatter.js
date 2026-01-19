@@ -1,7 +1,13 @@
 const mealFormatter = {
   formatMealResponse(meal) {
-    // Determine meal type based on captured time
-    const hour = new Date(meal.capturedAt).getHours();
+    // Determine meal type based on captured time in IST
+    const capturedDate = new Date(meal.capturedAt);
+    const istFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hour12: false
+    });
+    const hour = parseInt(istFormatter.format(capturedDate));
     let mealType = 'Snack';
     if (hour >= 6 && hour < 11) mealType = 'Breakfast';
     else if (hour >= 11 && hour < 16) mealType = 'Lunch';
@@ -45,9 +51,35 @@ const mealFormatter = {
       balanceMessage: balanceMessage,
       nutritionalSummary: nutritionalSummary,
       ingredients: ingredients,
-      timestamp: meal.capturedAt.toISOString(),
+      timestamp: this.formatTimestampInIST(meal.capturedAt),
       version: "1.0.0"
     };
+  },
+
+  formatTimestampInIST(date) {
+    // Format timestamp in IST timezone
+    const d = new Date(date);
+    
+    // Format as ISO-like string but in IST: YYYY-MM-DDTHH:mm:ss+05:30
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(d);
+    
+    const year = parts.find(p => p.type === 'year').value;
+    const month = parts.find(p => p.type === 'month').value;
+    const day = parts.find(p => p.type === 'day').value;
+    const hour = parts.find(p => p.type === 'hour').value;
+    const minute = parts.find(p => p.type === 'minute').value;
+    const second = parts.find(p => p.type === 'second').value;
+    
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
   }
 };
 
