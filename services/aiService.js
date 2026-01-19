@@ -346,15 +346,27 @@ Return ONLY a raw JSON object with this exact structure:
         "unit": "breast (180 gms)/cups/pieces/katori/etc"
       },
       "nutrition": {
-        "calories": 0,
-        "protein": 0,
-        "carbs": 0,
-        "fat": 0
+        "calories": 250.5,
+        "protein": 25.0,
+        "carbs": 15.0,
+        "fat": 10.5
       },
       "confidence": 0.0-1.0
     }
   ]
 }
+
+**CRITICAL NUTRITION CALCULATION REQUIREMENTS:**
+- You MUST calculate and provide ACTUAL nutrition values (not zeros) for EVERY item based on:
+  * The specific food item identified (be precise: "chicken breast" vs "chicken thigh")
+  * The estimated quantity/portion size from your visual analysis
+  * Standard nutritional databases (USDA, Indian food composition tables)
+  * Cooking method and preparation state (cooked vs raw)
+  * Account for added oils, butter, or cooking fats in your calculations
+- Calculate values based on the quantity provided (e.g., if quantity is "3 pieces (150 gms)", calculate nutrition for 150g of that item)
+- Do NOT return 0 for nutrition values - every food item has nutritional content
+- Round values to 1 decimal place for precision
+- The example values above (250.5 calories, 25.0 protein, etc.) are just format examples - you must calculate REAL values for each actual item
 
 Return only valid JSON, no additional text.`;
       parts.push({ text: prompt });
@@ -422,7 +434,7 @@ Return only valid JSON, no additional text.`;
       
       const responseText = result.response.text();
       console.log(`🤖 [GEMINI] Response received, length: ${responseText?.length || 0}`);
-      console.log(`🤖 [GEMINI] Raw response preview: ${responseText?.substring(0, 200)}...`);
+      console.log(`🤖 [GEMINI] Raw response preview: ${JSON.stringify(responseText)}`);
       
       if (!responseText || responseText.trim() === '') {
         console.error('❌ [GEMINI] Empty response received');
@@ -671,10 +683,10 @@ Return only valid JSON, no additional text.`;
       let llmModel;
       
       if (provider === 'openai') {
-        result = await this.analyzeFoodWithGemini(imageUrl, hint);
+        result = await this.analyzeFoodWithOpenAI(imageUrl, hint);
         llmModel = 'gpt-4o';
       } else {
-        result = await this.analyzeFoodWithOpenAI(imageUrl, hint);
+        result = await this.analyzeFoodWithGemini(imageUrl, hint);
         llmModel = 'gemini-2.5-flash';
       }
       
@@ -782,7 +794,7 @@ Return only valid JSON, no additional text.`;
         cleanResult = aiResult.split('```')[1].split('```')[0].trim();
       }
       
-      console.log('🤖 [AI] Cleaned AI result for parsing:', cleanResult.substring(0, 100) + '...');
+      console.log('🤖 [AI] Cleaned AI result for parsing:', JSON.stringify(cleanResult));
       
       // Try to parse as JSON first
       const parsed = JSON.parse(cleanResult);
