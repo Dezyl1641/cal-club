@@ -1,4 +1,5 @@
 const MealService = require('./mealService');
+const RecommendationService = require('./recommendationService');
 const { findUserById } = require('../models/user');
 const User = require('../models/schemas/User');
 const Question = require('../models/schemas/Question');
@@ -133,16 +134,28 @@ class AppFormatService {
       // Get today's meals for logged widget
       const todayMeals = await this.getTodayMeals(userId, currentDate);
       
+      // Get recommendation widget data
+      const recommendationWidget = await this.formatRecommendationWidget(userId);
+      
       // Format the response
+      const widgets = [
+        this.formatMacroWidget(todayData, goals)
+      ];
+      
+      // Add recommendation widget if available
+      if (recommendationWidget) {
+        widgets.push(recommendationWidget);
+      }
+      
+      // Add logged widget
+      widgets.push(this.formatLoggedWidget(todayMeals));
+      
       return {
         appBarData: this.formatAppBarData(todayData, goals.dailyCalories),
         weekViewData: this.formatWeekViewData(mondayDate, currentDate),
         daySelectorData: this.formatDaySelectorData(currentDate),
         showFloatingActionButton: true,
-        widgets: [
-          this.formatMacroWidget(todayData, goals),
-          this.formatLoggedWidget(todayMeals)
-        ],
+        widgets: widgets,
         footerData: this.formatFooterData()
       };
     } catch (error) {
@@ -340,6 +353,32 @@ class AppFormatService {
     };
   }
 
+  /**
+   * Format recommendation widget for app calendar
+   * @param {ObjectId} userId - User ID
+   * @returns {Promise<Object|null>} - Recommendation widget or null
+   */
+  static async formatRecommendationWidget(userId) {
+    try {
+      const recommendationData = await RecommendationService.getActiveRecommendation(userId);
+      
+      if (!recommendationData) {
+        return null;
+      }
+
+      return {
+        widgetType: "recommendation_widget",
+        widgetData: {
+          heading: recommendationData.heading,
+          description: recommendationData.description
+        }
+      };
+    } catch (error) {
+      console.error('Error formatting recommendation widget:', error);
+      return null; // Don't break the app if recommendation fails
+    }
+  }
+
   static formatFooterData() {
     return [
       {
@@ -474,17 +513,20 @@ class AppFormatService {
       let startWeight = null;
       let currentWeight = null;
       let lastCheckedIn = null;
+      let graphStartDate = null;
+      let graphEndDate = null;
+      let currentWeightChange = 0;
 
+      // Format weight history
+      const weightHistory = [];
       if (weightLogs.length > 0) {
         // Start weight = oldest entry (first in sorted array)
-        // Since date is sorted ascending (1), weightLogs[0] = oldest date
         const oldestLog = weightLogs[0];
         if (oldestLog && oldestLog.value) {
           startWeight = parseFloat(oldestLog.value);
         }
 
         // Current weight = latest entry (last in sorted array)
-        // Since date is sorted ascending (1), weightLogs[length-1] = latest date
         const latestLog = weightLogs[weightLogs.length - 1];
         if (latestLog && latestLog.value) {
           currentWeight = parseFloat(latestLog.value);
@@ -494,6 +536,45 @@ class AppFormatService {
         if (latestLog && latestLog.date && /^\d{4}-\d{2}-\d{2}$/.test(latestLog.date)) {
           lastCheckedIn = latestLog.date; // Already in YYYY-MM-DD format
         }
+
+        // Set graph dates
+        if (oldestLog && oldestLog.date && /^\d{4}-\d{2}-\d{2}$/.test(oldestLog.date)) {
+          graphStartDate = oldestLog.date;
+        }
+        if (latestLog && latestLog.date && /^\d{4}-\d{2}-\d{2}$/.test(latestLog.date)) {
+          graphEndDate = latestLog.date;
+        }
+
+        // Calculate currentWeightChange (difference from previous weight)
+        if (weightLogs.length > 1) {
+          const previousLog = weightLogs[weightLogs.length - 2];
+          if (previousLog && previousLog.value && latestLog && latestLog.value) {
+            currentWeightChange = parseFloat((parseFloat(latestLog.value) - parseFloat(previousLog.value)).toFixed(1));
+          }
+        }
+
+        // Format weight history with labels
+        weightLogs.forEach(log => {
+          if (log.date && log.value && /^\d{4}-\d{2}-\d{2}$/.test(log.date)) {
+            try {
+              const date = new Date(log.date + 'T00:00:00');
+              if (!isNaN(date.getTime())) {
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const month = monthNames[date.getMonth()];
+                const day = date.getDate();
+                const label = `${month} ${day}`;
+                
+                weightHistory.push({
+                  date: log.date,
+                  value: parseFloat(log.value),
+                  label: label
+                });
+              }
+            } catch (error) {
+              console.warn('Error formatting weight history entry:', error);
+            }
+          }
+        });
       }
 
       // Get target weight from user goals
@@ -611,6 +692,9 @@ class AppFormatService {
         }
       }
 
+      // Get weekly overview data
+      const weeklyOverview = await this.getWeeklyOverviewData(userIdObjectId, dailyGoal.calorie);
+
       // Footer data (static navigation)
       const footerData = [
         {
@@ -639,15 +723,110 @@ class AppFormatService {
           startWeight: startWeight || 0,
           currentWeight: currentWeight || 0,
           targetWeight: targetWeight || 0,
-          weightChangePerWeek: Math.round(weightChangePerWeek * 10) / 10 // Round to 1 decimal
+          weightChangePerWeek: Math.round(weightChangePerWeek * 10) / 10, // Round to 1 decimal
+          graphStartDate: graphStartDate || null,
+          graphEndDate: graphEndDate || null,
+          weightHistory: weightHistory,
+          currentWeightChange: currentWeightChange
         },
         dailyGoal,
         lastCheckedIn: formattedLastCheckedIn,
         nextCheckIn,
+        weeklyOverview,
         footerData
       };
     } catch (error) {
       throw new Error(`Failed to fetch progress data: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get weekly overview data for progress screen
+   * @param {ObjectId} userId - User ID
+   * @param {number} dailyCalorieGoal - Daily calorie goal
+   * @returns {Object} Weekly overview data
+   */
+  static async getWeeklyOverviewData(userId, dailyCalorieGoal) {
+    try {
+      // Get current week (Monday to Sunday) in IST
+      const now = new Date();
+      const istFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      
+      // Get today's date in IST
+      const todayIST = istFormatter.format(now);
+      const [year, month, day] = todayIST.split('-').map(Number);
+      const todayDate = new Date(Date.UTC(year, month - 1, day, 6, 30, 0, 0));
+      
+      // Calculate Monday of current week
+      const currentDayOfWeek = todayDate.getUTCDay();
+      const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1;
+      const mondayDate = new Date(todayDate);
+      mondayDate.setUTCDate(mondayDate.getUTCDate() - daysToMonday);
+      
+      // Calculate Sunday of current week
+      const sundayDate = new Date(mondayDate);
+      sundayDate.setUTCDate(sundayDate.getUTCDate() + 6);
+      
+      // Format dates for query
+      const mondayIST = istFormatter.format(mondayDate);
+      const sundayIST = istFormatter.format(sundayDate);
+      
+      // Fetch daily summary for the week
+      const dailySummary = await MealService.getDailySummary(userId, mondayIST, sundayIST);
+      
+      // Create a map of date to calories
+      const caloriesMap = {};
+      dailySummary.forEach(entry => {
+        if (entry.date && entry.calories !== undefined) {
+          caloriesMap[entry.date] = entry.calories || 0;
+        }
+      });
+      
+      // Build daily data array (Monday to Sunday)
+      const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dailyData = [];
+      let totalIntake = 0;
+      
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(mondayDate);
+        dayDate.setUTCDate(dayDate.getUTCDate() + i);
+        const dayDateIST = istFormatter.format(dayDate);
+        
+        const intake = caloriesMap[dayDateIST] || 0;
+        totalIntake += intake;
+        
+        dailyData.push({
+          day: dayNames[i],
+          date: dayDateIST,
+          intake: Math.round(intake),
+          burned: null, // As per user request
+          goalMet: intake <= dailyCalorieGoal
+        });
+      }
+      
+      // Calculate average intake (average of all 7 days)
+      const avgIntake = Math.round(totalIntake / 7);
+      
+      return {
+        avgIntake: avgIntake,
+        avgBurned: null, // As per user request
+        dailyGoal: dailyCalorieGoal,
+        dailyData: dailyData
+      };
+    } catch (error) {
+      console.warn('Error fetching weekly overview data:', error);
+      // Return empty weekly overview on error
+      return {
+        avgIntake: 0,
+        avgBurned: null,
+        dailyGoal: dailyCalorieGoal,
+        dailyData: []
+      };
     }
   }
 
@@ -672,13 +851,8 @@ class AppFormatService {
         email: user.email || null
       };
 
-      // Check onboarding completion
-      const isOnboardingComplete = await this.checkOnboardingCompletion(userId);
-
       // Build menu items
-      const menuItems = this.buildMenuItems({
-        isOnboardingComplete
-      });
+      const menuItems = this.buildMenuItems({});
 
       // Build footer data
       const footerData = this.buildSettingsFooterData();
@@ -686,7 +860,9 @@ class AppFormatService {
       return {
         header,
         menuItems,
-        footerData
+        footerData,
+        ppUrl: 'https://docs.google.com/document/d/1vMNZFXL72WmHYr1gqaiQkdmylIdS_7JaloBhQ3JINC0/edit?usp=sharing',
+        tosUrl: 'https://docs.google.com/document/d/1ZiEeWPyMOGkJuqL3DaUuxsNpcQdyK82sD2gfjce8vMk/edit?usp=sharing'
       };
     } catch (error) {
       console.error('Error building settings data:', error);
@@ -748,34 +924,6 @@ class AppFormatService {
   static buildMenuItems({ isOnboardingComplete }) {
     const menuItems = [];
 
-    // Onboarding item (only if incomplete)
-    if (!isOnboardingComplete) {
-      menuItems.push({
-        id: 'onboarding',
-        icon: 'quiz',
-        title: 'Complete Onboarding',
-        action: 'navigate_onboarding',
-        url: null,
-        type: 'navigation',
-        color: null,
-        showDivider: false,
-        subtitle: null
-      });
-    }
-
-    // Progress item
-    menuItems.push({
-      id: 'progress',
-      icon: 'trending_up',
-      title: 'Progress',
-      action: 'navigate_progress',
-      url: null,
-      type: 'navigation',
-      color: null,
-      showDivider: false,
-      subtitle: null
-    });
-
     // Goal Settings
     menuItems.push({
       id: 'goal_settings',
@@ -802,38 +950,38 @@ class AppFormatService {
       subtitle: null
     });
 
-    // Privacy Policy
+    // Subscriptions
     menuItems.push({
-      id: 'privacy',
-      icon: 'privacy_tip',
-      title: 'Privacy Policy',
-      action: 'open_url',
-      url: 'https://calclub.com/privacy-policy',
-      type: 'external_link',
+      id: 'subscriptions',
+      icon: 'subscriptions',
+      title: 'Subscriptions',
+      action: 'navigate_subscriptions',
+      url: null,
+      type: 'navigation',
       color: null,
-      showDivider: false,
+      showDivider: true,
       subtitle: null
     });
 
-    // Terms of Service
+    // Apple Health
     menuItems.push({
-      id: 'terms',
-      icon: 'description',
-      title: 'Terms of Service',
-      action: 'open_url',
-      url: 'https://calclub.com/terms-of-service',
-      type: 'external_link',
+      id: 'apple_health',
+      icon: 'health_and_safety',
+      title: 'Apple Health',
+      action: 'apple_health',
+      url: null,
+      type: 'action',
       color: null,
       showDivider: false,
-      subtitle: null
+      subtitle: 'Connect to track calories burned'
     });
 
-    // Delete Account (with divider before it)
+    // Logout (with divider before it)
     menuItems.push({
-      id: 'delete_account',
-      icon: 'delete_forever',
-      title: 'Delete Account',
-      action: 'delete_account',
+      id: 'logout',
+      icon: 'logout',
+      title: 'Logout',
+      action: 'logout',
       url: null,
       type: 'action',
       color: 'red',
@@ -841,12 +989,12 @@ class AppFormatService {
       subtitle: null
     });
 
-    // Logout (no divider)
+    // Delete Account
     menuItems.push({
-      id: 'logout',
-      icon: 'logout',
-      title: 'Logout',
-      action: 'logout',
+      id: 'delete_account',
+      icon: 'delete_forever',
+      title: 'Delete Account',
+      action: 'delete_account',
       url: null,
       type: 'action',
       color: 'red',

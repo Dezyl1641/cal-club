@@ -10,6 +10,7 @@ const webhookRoutes = require('./webhookRoutes');
 const goalRoutes = require('./goalRoutes');
 const userLogRoutes = require('./userLogRoutes');
 const notificationRoutes = require('./notificationRoutes');
+const recommendationRoutes = require('./recommendationRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -83,7 +84,12 @@ function setupRoutes(req, res) {
       // Notification routes
       if (url.startsWith('/notifications')) {
         return notificationRoutes(req, res);
-  }
+      }
+
+      // Recommendation routes
+      if (url.startsWith('/recommendations')) {
+        return recommendationRoutes(req, res);
+      }
 
   // Default 404
   res.writeHead(404, { 'Content-Type': 'application/json' });

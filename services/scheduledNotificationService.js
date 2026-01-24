@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { getActivePreferencesByTime } = require('../models/notificationPreference');
 const NotificationService = require('./notificationService');
+const RecommendationService = require('./recommendationService');
 
 // Meal reminder messages
 const REMINDER_MESSAGES = {
@@ -86,8 +87,8 @@ async function processMealReminders(time) {
 function initializeMealReminderCron() {
   console.log('🚀 [CRON] Initializing meal reminder cron job...');
   
-  // Run every minute
-  const job = cron.schedule('* * * * *', async () => {
+  // Run every minute for meal reminders
+  const mealReminderJob = cron.schedule('* * * * *', async () => {
     const currentTime = getCurrentTimeIST();
     await processMealReminders(currentTime);
   }, {
@@ -96,8 +97,23 @@ function initializeMealReminderCron() {
   });
 
   console.log('✅ [CRON] Meal reminder cron job initialized');
+
+  // Run every 15 minutes for recommendation processing
+  const recommendationJob = cron.schedule('*/15 * * * *', async () => {
+    console.log('🔔 [CRON] Running recommendation cron job...');
+    try {
+      await RecommendationService.processRecommendations();
+    } catch (error) {
+      console.error('❌ [CRON] Error in recommendation cron job:', error);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'Asia/Kolkata'
+  });
+
+  console.log('✅ [CRON] Recommendation cron job initialized (every 15 mins)');
   
-  return job;
+  return { mealReminderJob, recommendationJob };
 }
 
 /**
