@@ -212,7 +212,14 @@ Return only valid JSON, no additional text.`;
       temperature: 0.1,
       response_format: { type: "json_object" }
     });
-    return completion.choices[0].message.content;
+    
+    return {
+      response: completion.choices[0].message.content,
+      tokens: {
+        input: completion.usage?.prompt_tokens || null,
+        output: completion.usage?.completion_tokens || null
+      }
+    };
   }
 
   static async analyzeFoodWithGemini(imageUrl, hint) {
@@ -441,7 +448,16 @@ Return only valid JSON, no additional text.`;
         throw new Error('Empty response from Gemini API');
       }
       
-      return responseText;
+      // Extract token usage from Gemini response
+      const usageMetadata = result.response.usageMetadata;
+      
+      return {
+        response: responseText,
+        tokens: {
+          input: usageMetadata?.promptTokenCount || null,
+          output: usageMetadata?.candidatesTokenCount || null
+        }
+      };
     } catch (error) {
       console.error('❌ [GEMINI] API Error:', error.message);
       console.error('❌ [GEMINI] Full error:', error);
@@ -681,13 +697,18 @@ Return only valid JSON, no additional text.`;
     try {
       let result;
       let llmModel;
+      let tokens = { input: null, output: null };
       
       if (provider === 'openai') {
         result = await this.analyzeFoodWithOpenAI(imageUrl, hint);
         llmModel = 'gpt-4o';
+        tokens = result.tokens || { input: null, output: null };
+        result = result.response; // Extract response text
       } else {
         result = await this.analyzeFoodWithGemini(imageUrl, hint);
         llmModel = 'gemini-2.5-flash';
+        tokens = result.tokens || { input: null, output: null };
+        result = result.response; // Extract response text
       }
       
       // Save meal data to database if userId is provided
@@ -696,7 +717,7 @@ Return only valid JSON, no additional text.`;
       if (userId) {
         // Use imageUrl if available, otherwise use hint as a reference
         const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
-        savedMeal = await this.saveMealData(userId, imageReference, result, provider, llmModel, additionalData);
+        savedMeal = await this.saveMealData(userId, imageReference, result, provider, llmModel, additionalData, tokens);
       }
       
       return { 
@@ -709,7 +730,7 @@ Return only valid JSON, no additional text.`;
     }
   }
 
-  static async saveMealData(userId, imageUrl, aiResult, provider, llmModel, additionalData = {}) {
+  static async saveMealData(userId, imageUrl, aiResult, provider, llmModel, additionalData = {}, tokens = { input: null, output: null }) {
     try {
       // Parse structured JSON response from AI
       const parsedResult = this.parseAIResult(aiResult);
@@ -773,7 +794,9 @@ Return only valid JSON, no additional text.`;
         },
         items: mealItems,
         notes: additionalData.notes || `AI Analysis: ${parsedResult.mealName}`,
-        userApproved: false
+        userApproved: false,
+        inputTokens: tokens.input,
+        outputTokens: tokens.output
       };
 
       const meal = new Meal(mealData);

@@ -79,6 +79,14 @@ const mealSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  inputTokens: {
+    type: Number,
+    default: null
+  },
+  outputTokens: {
+    type: Number,
+    default: null
+  },
   deletedAt: {
     type: Date,
     default: null
