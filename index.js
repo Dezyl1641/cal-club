@@ -4,7 +4,9 @@ const Sentry = require('@sentry/node');
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENV || 'prod',
-  tracesSampleRate: 0,
+  tracesSampleRate: typeof process.env.SENTRY_TRACES_SAMPLE_RATE !== 'undefined'
+    ? parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE, 10)
+    : 0.1,
 });
 
 const http = require('http');
@@ -27,27 +29,55 @@ process.on('uncaughtException', (err) => {
 });
 
 const server = http.createServer(async (req, res) => {
-  try {
-    jwtMiddleware(req, res, () => {
+  const path = req.url?.split('?')[0] || req.url || '/';
+  const transactionName = `${req.method || 'GET'} ${path}`;
+
+  Sentry.startSpanManual(
+    {
+      name: transactionName,
+      op: 'http.server',
+      forceTransaction: true,
+      attributes: {
+        'http.request.method': req.method,
+        'url.path': path,
+      },
+    },
+    (span) => {
+      let ended = false;
+      const endSpan = () => {
+        if (ended || !span || typeof span.end !== 'function') return;
+        ended = true;
+        try {
+          Sentry.setHttpStatus(span, res.statusCode || 500);
+        } catch (_) {}
+        span.end();
+      };
+      res.once('finish', endSpan);
+      res.once('close', endSpan);
+
       try {
-        setupRoutes(req, res);
+        jwtMiddleware(req, res, () => {
+          try {
+            setupRoutes(req, res);
+          } catch (err) {
+            reportError(err, { req });
+            console.error('Route error:', err);
+            if (!res.headersSent) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Internal server error', details: err.message }));
+            }
+          }
+        });
       } catch (err) {
         reportError(err, { req });
-        console.error('Route error:', err);
+        console.error('Request error:', err);
         if (!res.headersSent) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Internal server error', details: err.message }));
         }
       }
-    });
-  } catch (err) {
-    reportError(err, { req });
-    console.error('Request error:', err);
-    if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Internal server error', details: err.message }));
     }
-  }
+  );
 });
 
 connectToMongo().then(() => {
