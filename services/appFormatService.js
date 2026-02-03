@@ -951,17 +951,17 @@ class AppFormatService {
     });
 
     // Subscriptions
-    menuItems.push({
-      id: 'subscriptions',
-      icon: 'subscriptions',
-      title: 'Subscriptions',
-      action: 'navigate_subscriptions',
-      url: null,
-      type: 'navigation',
-      color: null,
-      showDivider: true,
-      subtitle: null
-    });
+    // menuItems.push({
+    //   id: 'subscriptions',
+    //   icon: 'subscriptions',
+    //   title: 'Subscriptions',
+    //   action: 'navigate_subscriptions',
+    //   url: null,
+    //   type: 'navigation',
+    //   color: null,
+    //   showDivider: true,
+    //   subtitle: null
+    // });
 
     // Apple Health
     menuItems.push({
