@@ -4,6 +4,7 @@ const Membership = require('../models/schemas/Membership');
 const Plan = require('../models/schemas/Plan');
 const googlePlayService = require('../services/googlePlayService');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 /**
  * Google Play Real-Time Developer Notification (RTDN) Types
@@ -189,6 +190,7 @@ async function handleGooglePlayWebhook(req, res) {
     try {
       purchaseData = await googlePlayService.verifySubscription(subscriptionId, purchaseToken);
     } catch (error) {
+      reportError(error, { req, extra: { context: 'google_play_verify' } });
       console.error('❌ [GOOGLE_PLAY_WEBHOOK] Failed to verify with Google:', error.message);
       paymentEvent.processing_error = error.message;
       paymentEvent.processed = true;
@@ -253,6 +255,7 @@ async function handleGooglePlayWebhook(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [GOOGLE_PLAY_WEBHOOK] Processing error:', error.message);
     console.error('Stack:', error.stack);
 
@@ -317,6 +320,7 @@ async function updateMembershipOnRenewal(subscription, purchaseData) {
     console.log('   Membership ID:', newMembership._id);
     console.log('   Period:', startDate.toISOString(), '→', endDate.toISOString());
   } catch (error) {
+    reportError(error, { req, extra: { context: 'google_play_renewal_membership' } });
     console.error('❌ [GOOGLE_PLAY_WEBHOOK] Failed to create renewal membership:', error.message);
   }
 }

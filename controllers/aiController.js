@@ -2,6 +2,7 @@ const AiService = require('../services/aiService');
 const parseBody = require('../utils/parseBody');
 const mealFormatter = require('../utils/mealFormatter');
 const dateUtils = require('../utils/dateUtils');
+const { reportError } = require('../utils/sentryReporter');
 
 function foodCalories(req, res) {
   parseBody(req, async (err, data) => {
@@ -38,6 +39,7 @@ function foodCalories(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     } catch (error) {
+      reportError(error, { req });
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to analyze image', details: error.message }));
     }

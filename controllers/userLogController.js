@@ -1,5 +1,6 @@
 const UserLog = require('../models/schemas/UserLog');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 /**
  * Create a new user log entry
@@ -149,6 +150,7 @@ async function createUserLog(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error creating user log:', error);
     
     // Handle duplicate key error (unique index violation)

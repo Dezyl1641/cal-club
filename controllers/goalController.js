@@ -1,5 +1,6 @@
 const goalService = require('../services/goalService');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 /**
  * Calculate and validate goal targets based on user inputs (v1 - Legacy)
@@ -49,6 +50,7 @@ async function calculateGoals(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error calculating goals:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -107,6 +109,7 @@ async function calculateGoalsV2(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error calculating goals v2:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -230,6 +233,7 @@ async function calculateAndSaveGoals(req, res) {
     res.end(JSON.stringify(response));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error calculating and saving goals:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

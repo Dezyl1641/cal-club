@@ -1,4 +1,5 @@
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 const {
   upsertDeviceDetail,
   deactivateDeviceDetailByToken,
@@ -69,6 +70,7 @@ async function registerToken(req, res) {
       }
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error registering device token:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -128,6 +130,7 @@ async function deregisterToken(req, res) {
       message: 'Device token deregistered successfully'
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error deregistering device token:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -181,6 +184,7 @@ async function sendNotification(req, res) {
       failures: result.failures || []
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error sending notification:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -273,6 +277,7 @@ async function createPreference(req, res) {
       }
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [NOTIFICATION_PREF_API] Error creating preference:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -324,6 +329,7 @@ async function getPreferences(req, res) {
       currentTimeIST: getCurrentTimeIST()
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [NOTIFICATION_PREF_API] Error fetching preferences:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -380,6 +386,7 @@ async function deletePreference(req, res) {
       deactivatedCount: result.modifiedCount
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [NOTIFICATION_PREF_API] Error deactivating preference:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -434,6 +441,7 @@ async function testReminder(req, res) {
       currentTimeIST: getCurrentTimeIST()
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [NOTIFICATION_PREF_API] Error sending test reminder:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

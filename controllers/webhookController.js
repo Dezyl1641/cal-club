@@ -3,6 +3,7 @@ const Subscription = require('../models/schemas/Subscription');
 const Membership = require('../models/schemas/Membership');
 const Plan = require('../models/schemas/Plan');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 // Note: Signature verification removed as it's disabled in Razorpay dashboard
 
@@ -57,6 +58,7 @@ async function createMembership(subscription, plan) {
     
     return membership;
   } catch (error) {
+    reportError(error, { extra: { context: 'createMembership', subscriptionId: subscription?.userId } });
     console.error('❌ [RAZORPAY] ERROR CREATING MEMBERSHIP:', error);
     throw error;
   }
@@ -125,6 +127,7 @@ async function createRenewalMembership(subscription, plan) {
     
     return newMembership;
   } catch (error) {
+    reportError(error, { extra: { context: 'createRenewalMembership', subscriptionId: subscription?.userId } });
     console.error('❌ [RAZORPAY] ERROR CREATING RENEWAL MEMBERSHIP:', error);
     throw error;
   }
@@ -266,6 +269,7 @@ async function handleRazorpayWebhook(req, res) {
           await createMembership(subscription, plan);
         }
       } catch (error) {
+        reportError(error, { req, extra: { context: 'razorpay_membership_creation' } });
         console.error('❌ [RAZORPAY] ERROR CREATING MEMBERSHIP:', error);
         // Don't fail the webhook for membership creation errors
       }
@@ -297,6 +301,7 @@ async function handleRazorpayWebhook(req, res) {
           console.log('ℹ️ [RAZORPAY] First charge detected, membership will be created by authenticated event');
         }
       } catch (error) {
+        reportError(error, { req, extra: { context: 'razorpay_renewal' } });
         console.error('❌ [RAZORPAY] ERROR PROCESSING RENEWAL:', error);
         // Don't fail the webhook for membership creation errors
       }
@@ -324,6 +329,7 @@ async function handleRazorpayWebhook(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ WEBHOOK PROCESSING ERROR');
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
@@ -375,6 +381,7 @@ async function getPaymentEvents(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching payment events:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 

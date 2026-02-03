@@ -1,6 +1,7 @@
 const RecommendationService = require('../services/recommendationService');
 const Recommendation = require('../models/schemas/Recommendation');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 /**
  * Create a new recommendation template (Admin only)
@@ -84,6 +85,7 @@ async function createRecommendationTemplate(req, res) {
       }
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error creating recommendation template:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -109,6 +111,7 @@ async function getRecommendationTemplates(req, res) {
       data: recommendations
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching recommendation templates:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -181,6 +184,7 @@ async function updateRecommendationTemplate(req, res) {
       data: recommendation
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error updating recommendation template:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -207,6 +211,7 @@ async function triggerRecommendationProcessing(req, res) {
       message: 'Recommendation processing triggered successfully'
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error triggering recommendation processing:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

@@ -1,5 +1,6 @@
 const AuthService = require('../services/authService');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 function requestOtp(req, res) {
   parseBody(req, async (err, data) => {
@@ -18,6 +19,7 @@ function requestOtp(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(result));
     } catch (error) {
+      reportError(error, { req });
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to send OTP via SMS', details: error.message }));
     }
@@ -41,6 +43,7 @@ function verifyOtp(req, res) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Invalid OTP.' }));
       } else {
+        reportError(error, { req });
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Database error', details: error.message }));
       }
@@ -66,6 +69,7 @@ function verifyFirebaseToken(req, res) {
         res.writeHead(401, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: error.message }));
       } else {
+        reportError(error, { req });
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Failed to verify Firebase token', details: error.message }));
       }

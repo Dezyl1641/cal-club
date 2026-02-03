@@ -1,4 +1,5 @@
 const AppFormatService = require('../services/appFormatService');
+const { reportError } = require('../utils/sentryReporter');
 
 async function getAppCalendar(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -23,6 +24,7 @@ async function getAppCalendar(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(appCalendarData));
   } catch (error) {
+    reportError(error, { req });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch app calendar data', details: error.message }));
   }
@@ -49,6 +51,7 @@ async function getProgress(req, res) {
       data: progressData
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching progress data:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -81,6 +84,7 @@ async function getSettings(req, res) {
       data: settingsData
     }));
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching settings data:', error);
     
     // Handle specific error cases

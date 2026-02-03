@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { getActivePreferencesByTime } = require('../models/notificationPreference');
 const NotificationService = require('./notificationService');
 const RecommendationService = require('./recommendationService');
+const { reportError } = require('../utils/sentryReporter');
 
 // Meal reminder messages
 const REMINDER_MESSAGES = {
@@ -72,10 +73,12 @@ async function processMealReminders(time) {
           console.log(`✅ [CRON] Successfully sent ${pref.type} reminder to user ${pref.userId} (${result.sentCount} devices) at ${time}`);
         }
       } catch (error) {
+        reportError(error, { extra: { userId: pref.userId?.toString(), type: pref.type, time } });
         console.error(`❌ [CRON] Error sending reminder to user ${pref.userId}:`, error.message);
       }
     }
   } catch (error) {
+    reportError(error, { extra: { time, context: 'processMealReminders' } });
     console.error(`❌ [CRON] Error processing meal reminders for ${time}:`, error);
   }
 }
@@ -104,6 +107,7 @@ function initializeMealReminderCron() {
     try {
       await RecommendationService.processRecommendations();
     } catch (error) {
+      reportError(error, { extra: { context: 'recommendationCronJob' } });
       console.error('❌ [CRON] Error in recommendation cron job:', error);
     }
   }, {
@@ -144,6 +148,7 @@ async function sendTestReminder(userId, type) {
     console.log(`🧪 [TEST] Test notification result:`, result);
     return result;
   } catch (error) {
+    reportError(error, { extra: { userId, type, context: 'sendTestReminder' } });
     console.error(`❌ [TEST] Error sending test notification:`, error);
     return { success: false, error: error.message };
   }

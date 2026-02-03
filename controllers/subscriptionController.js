@@ -7,6 +7,7 @@ const { GooglePlayService } = require('../services/googlePlayService');
 const appleStoreService = require('../services/appleStoreService');
 const { AppleStoreService } = require('../services/appleStoreService');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 async function createSubscription(req, res) {
   try {
@@ -67,6 +68,7 @@ async function createSubscription(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error creating subscription:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -96,6 +98,7 @@ async function getSubscription(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching subscription:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -118,6 +121,7 @@ async function getActivePlans(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching active plans:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -170,6 +174,7 @@ async function cancelMembership(req, res) {
         await paymentService.cancelSubscription(subscription.external_subscription_id);
         console.log('✅ Razorpay subscription cancelled:', subscription.external_subscription_id);
       } catch (error) {
+        reportError(error, { req });
         console.error('❌ Error cancelling Razorpay subscription:', error);
         // Continue with database update even if Razorpay cancellation fails
       }
@@ -195,6 +200,7 @@ async function cancelMembership(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error cancelling membership:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -240,6 +246,7 @@ async function getSubscriptionById(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching subscription:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -334,6 +341,7 @@ async function verifyGooglePlayPurchase(req, res) {
     try {
       purchaseData = await googlePlayService.verifySubscription(productId, purchaseToken);
     } catch (error) {
+      reportError(error, { req });
       console.error('❌ [GOOGLE_PLAY_VERIFY] Verification failed:', error.message);
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ 
@@ -414,6 +422,7 @@ async function verifyGooglePlayPurchase(req, res) {
         await subscription.save();
         console.log('✅ [GOOGLE_PLAY_VERIFY] Purchase acknowledged');
       } catch (ackError) {
+        reportError(ackError, { req, extra: { context: 'google_play_acknowledge' } });
         console.error('⚠️ [GOOGLE_PLAY_VERIFY] Failed to acknowledge:', ackError.message);
         // Don't fail the request, but log for retry
       }
@@ -445,6 +454,7 @@ async function verifyGooglePlayPurchase(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [GOOGLE_PLAY_VERIFY] Error:', error.message);
     console.error('Stack:', error.stack);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -500,6 +510,7 @@ async function getGooglePlaySubscriptionStatus(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error getting Google Play status:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -553,6 +564,7 @@ async function verifyApplePurchase(req, res) {
     try {
       receiptResponse = await appleStoreService.verifyReceipt(receiptData);
     } catch (error) {
+      reportError(error, { req });
       console.error('❌ [APPLE_VERIFY] Receipt verification failed:', error.message);
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ 
@@ -730,6 +742,7 @@ async function verifyApplePurchase(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [APPLE_VERIFY] Error:', error.message);
     console.error('Stack:', error.stack);
     res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -789,6 +802,7 @@ async function getAppleSubscriptionStatus(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error getting Apple subscription status:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 
@@ -832,6 +846,7 @@ async function restoreApplePurchases(req, res) {
     try {
       receiptResponse = await appleStoreService.verifyReceipt(receiptData);
     } catch (error) {
+      reportError(error, { req });
       console.error('❌ [APPLE_RESTORE] Receipt verification failed:', error.message);
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ 
@@ -934,6 +949,7 @@ async function restoreApplePurchases(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [APPLE_RESTORE] Error:', error.message);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ 

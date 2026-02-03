@@ -1,5 +1,6 @@
 const { updateUser } = require('../models/user');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 function updateUserProfile(req, res) {
   parseBody(req, async (err, updateData) => {
@@ -71,6 +72,7 @@ function updateUserProfile(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(safeUserData));
     } catch (error) {
+      reportError(error, { req });
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to update user', details: error.message }));
     }
@@ -121,6 +123,7 @@ async function deleteUser(req, res) {
         userId: user._id
       }));
     } catch (error) {
+      reportError(error, { req });
       console.error('Error deactivating user:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to deactivate user', details: error.message }));

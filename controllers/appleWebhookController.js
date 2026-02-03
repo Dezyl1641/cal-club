@@ -5,6 +5,7 @@ const Plan = require('../models/schemas/Plan');
 const appleStoreService = require('../services/appleStoreService');
 const { AppleStoreService } = require('../services/appleStoreService');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 /**
  * App Store Server Notification V2 Types
@@ -303,6 +304,7 @@ async function handleAppleWebhook(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('❌ [APPLE_WEBHOOK] Processing error:', error.message);
     console.error('Stack:', error.stack);
 
@@ -367,6 +369,7 @@ async function handleRenewal(subscription, transactionInfo) {
     console.log('   Membership ID:', newMembership._id);
     console.log('   Period:', startDate.toISOString(), '→', endDate.toISOString());
   } catch (error) {
+    reportError(error, { req, extra: { context: 'apple_renewal_membership' } });
     console.error('❌ [APPLE_WEBHOOK] Failed to create renewal membership:', error.message);
   }
 }
@@ -388,6 +391,7 @@ async function handleRefund(subscription, transactionInfo) {
     
     console.log('✅ [APPLE_WEBHOOK] Refund processed');
   } catch (error) {
+    reportError(error, { req, extra: { context: 'apple_refund' } });
     console.error('❌ [APPLE_WEBHOOK] Failed to process refund:', error.message);
   }
 }
@@ -415,6 +419,7 @@ async function handleRevoke(subscription, transactionInfo) {
     
     console.log('✅ [APPLE_WEBHOOK] Revocation processed');
   } catch (error) {
+    reportError(error, { req, extra: { context: 'apple_revocation' } });
     console.error('❌ [APPLE_WEBHOOK] Failed to process revocation:', error.message);
   }
 }

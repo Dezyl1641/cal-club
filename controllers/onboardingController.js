@@ -1,5 +1,6 @@
 const OnboardingService = require('../services/onboardingService');
 const parseBody = require('../utils/parseBody');
+const { reportError } = require('../utils/sentryReporter');
 
 class OnboardingController {
   static async getQuestions(req, res) {
@@ -17,6 +18,7 @@ class OnboardingController {
         count: questions.length
       }));
     } catch (error) {
+      reportError(error, { req });
       console.error('Error fetching questions:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -74,6 +76,7 @@ class OnboardingController {
           data: result.results
         }));
       } catch (error) {
+        reportError(error, { req });
         console.error('Error saving answers:', error);
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -108,6 +111,7 @@ class OnboardingController {
         count: answers.length
       }));
     } catch (error) {
+      reportError(error, { req });
       console.error('Error fetching user answers:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({

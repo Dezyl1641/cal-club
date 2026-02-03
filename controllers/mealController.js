@@ -4,6 +4,7 @@ const MealEditAudit = require('../models/schemas/MealEditAudit');
 const parseBody = require('../utils/parseBody');
 const mealFormatter = require('../utils/mealFormatter');
 const AiService = require('../services/aiService');
+const { reportError } = require('../utils/sentryReporter');
 
 /**
  * Helper function to create a snapshot of meal state for audit
@@ -47,6 +48,7 @@ function createMeal(req, res) {
       res.writeHead(201, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(meal));
     } catch (error) {
+      reportError(error, { req });
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to create meal', details: error.message }));
     }
@@ -68,6 +70,7 @@ async function getMeals(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(meals));
   } catch (error) {
+    reportError(error, { req });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch meals', details: error.message }));
   }
@@ -89,6 +92,7 @@ async function getMealById(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(formattedResponse));
   } catch (error) {
+    reportError(error, { req });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch meal', details: error.message }));
   }
@@ -371,6 +375,7 @@ async function updateMeal(req, res) {
       res.end(JSON.stringify({ error: 'Either newQuantity, newItem, or nutrition fields must be provided' }));
 
     } catch (error) {
+      reportError(error, { req });
       console.error('Error updating meal:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to update meal', details: error.message }));
@@ -391,6 +396,7 @@ async function deleteMeal(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ message: 'Meal deleted successfully' }));
   } catch (error) {
+    reportError(error, { req });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to delete meal', details: error.message }));
   }
@@ -412,6 +418,7 @@ async function getDailySummary(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(summary));
   } catch (error) {
+    reportError(error, { req });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch daily summary', details: error.message }));
   }
@@ -440,6 +447,7 @@ async function getCalendarData(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(calendarData));
   } catch (error) {
+    reportError(error, { req });
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch calendar data', details: error.message }));
   }
@@ -506,6 +514,7 @@ async function getNutritionForItem(newItemName, currentMealName, previousItemNam
       }
     };
   } catch (error) {
+    reportError(error, { extra: { context: 'getNutritionForItem', itemName: newItemName } });
     console.error('Error getting AI nutrition:', error);
     // Return default values if AI fails
     return {
@@ -952,6 +961,7 @@ function bulkEditItems(req, res) {
       res.end(JSON.stringify(formattedResponse));
 
     } catch (error) {
+      reportError(error, { req });
       const totalDuration = Date.now() - bulkEditStartTime;
       console.error('❌ [BULK_EDIT] Error in bulkEditItems:', {
         error: error.message,
@@ -1021,6 +1031,7 @@ async function getMealAuditHistory(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching meal audit history:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch audit history', details: error.message }));
@@ -1059,6 +1070,7 @@ async function getAuditEntry(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching audit entry:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch audit entry', details: error.message }));
@@ -1106,6 +1118,7 @@ async function getUserAuditSummary(req, res) {
     }));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error fetching audit summary:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to fetch audit summary', details: error.message }));
@@ -1222,6 +1235,7 @@ async function addItemToMeal(req, res) {
             { itemId: newItemId, field: 'fat', previousValue: null, newValue: nutrition.fat }
           );
         } catch (aiError) {
+          reportError(aiError, { req, extra: { context: 'addItemToMeal_AI_nutrition', itemName: data.name } });
           console.error('Error getting AI nutrition:', aiError);
           // Fallback to default nutrition values if AI fails
           nutrition = {
@@ -1323,6 +1337,7 @@ async function addItemToMeal(req, res) {
       res.end(JSON.stringify(formattedResponse));
 
     } catch (error) {
+      reportError(error, { req });
       console.error('Error adding item to meal:', error);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Failed to add item to meal', details: error.message }));
@@ -1404,6 +1419,7 @@ async function deleteItemFromMeal(req, res) {
     res.end(JSON.stringify(formattedResponse));
 
   } catch (error) {
+    reportError(error, { req });
     console.error('Error deleting item from meal:', error);
     res.writeHead(500, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Failed to delete item from meal', details: error.message }));
