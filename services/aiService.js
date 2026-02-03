@@ -253,90 +253,91 @@ ${inputDataSection}
 
 ---
 
-### INSTRUCTIONS
+### STEP 1: ITEM IDENTIFICATION
 
-#### 1. Visual Analysis & Scale Calibration
-- *Identify Anchors:* Scan the image for intrinsic reference objects to determine physical scale. Look for standard cutlery (spoons ~14–16 cm), glassware, standard dinner plates (25–28 cm), or standard food item sizes. Use these to estimate the actual volume of the food.
-- *Texture Analysis:* Analyze surface texture and glossiness. High sheen indicates added oils, butters, or glazes. **Adjust the calorie density of the relevant parent dish or component accordingly. Do NOT list oils separately.**
+#### 1.1 Visual Identification
+- Segment the image and identify food items that are **calorically meaningful and user-editable**.
+- **Be Specific:** Do not be generic in identifying items, as calorie values differ (e.g., "bread" vs "sourdough bread").
 
----
+#### 1.2 Context Integration
+- **Context Usage:** Use the *User Hint* (if provided) to resolve ambiguities (e.g., "made with oat milk" vs "cow milk").
+- **Conflict Resolution:** If the User Hint contradicts strong visual evidence (e.g., user says "salad" but image shows "pizza"), **prioritize the User Hint** to prevent false tracking.
 
-#### 2. Item Identification & Context Integration
-- *Identify Items:* Segment the image and identify food items that are **calorically meaningful and user-editable**.
-- *Be Specific:* Do not be generic in identifying items, as calorie values differ (e.g., "bread" vs "sourdough bread").
-- *Context Usage:* Use the *User Hint* (if provided) to resolve ambiguities (e.g., "made with oat milk" vs "cow milk").
-- *Conflict Resolution:* If the User Hint (if provided) contradicts strong visual evidence (e.g., user says "salad" but image shows "pizza"), **prioritize the User Hint** to prevent false tracking.
+#### 1.3 Component Breakdown for Composite Dishes
 
----
+**When to Apply:**
+Apply only to **commonly named single dishes** where components are **cooked or mixed together** and users would reasonably want to edit components independently (e.g., biryani, curry with protein, pasta, noodle bowls).
 
-#### 3. Component Breakdown for Composite Dishes
+**Format:**
+List each component as a **separate top-level item** using: **\`Component (dish name)\`**
 
-##### When to Apply
-- Apply only to **commonly named single dishes** where components are **cooked or mixed together** and users would reasonably want to edit components independently  
-  (e.g., biryani, curry with protein, pasta, noodle bowls).
+Example: \`Chicken (chicken biryani)\`, \`Rice (chicken biryani)\`
 
-##### Format
-- List each component as a **separate top-level item** using:  
-  **\`Component (dish name)\`**  
-  Example: \`Chicken (chicken biryani)\`, \`Rice (chicken biryani)\`.
+**When decomposing, output ONLY the components. Never list the parent dish as a separate item.**
 
-##### Key Components Only
-- Decompose **only primary caloric components**:
-  - protein
-  - base carb (rice, noodles, bread)
-  - sauce / curry / gravy (if substantial)
-- Do **NOT** break dishes into ingredient-level elements such as onion, tomato, spices, masala, tempering, or cooking bases.
+**Key Components Only:**
+Decompose **only primary caloric components**:
+- Protein
+- Base carb (rice, noodles, bread)
+- Sauce / curry / gravy (if substantial)
 
-##### Minor Elements & Absorption Rule
-- Minor toppings, garnishes, condiments, or sprinkles (e.g., namkeen, fried onions, herbs) must **NOT** be listed separately.
-- Calories from such elements must be **absorbed into the parent dish or component** to avoid double counting.
-- **Exception:** Clearly countable protein sources (e.g., peanuts, paneer cubes, egg, meat pieces) must be listed separately even if mixed in.
+Do **NOT** break dishes into ingredient-level elements such as onion, tomato, spices, masala, tempering, or cooking bases.
 
-##### Curry-Based Dishes
-- Represent curry dishes as:
-  - \`protein (dish name)\`
-  - \`curry/gravy (dish name)\`
-- Curry/gravy includes oil, base, and sauce calories.
-- Do NOT list curry ingredients separately.
+**Curry-Based Dishes:**
+Represent curry dishes as:
+- \`Protein (dish name)\`
+- \`Curry/Gravy (dish name)\`
 
-##### When NOT to Apply
-- If items are already visually and spatially distinct on the plate (e.g., rice, dal, onion served separately), list them as independent items **without parentheses**.
+Curry/gravy includes oil, base, and sauce calories. Do NOT list curry ingredients separately.
+
+❌ Do NOT output: \`Chicken (chicken curry)\`, \`Curry (chicken curry)\`, AND \`Chicken curry\` together.
+
+**Minor Elements & Absorption Rule:**
+Minor toppings, garnishes, condiments, or sprinkles (e.g., namkeen, fried onions, herbs) must **NOT** be listed separately. Calories from such elements must be **absorbed into the parent dish or component**.
+
+**Exception:** Clearly countable protein sources (e.g., peanuts, paneer cubes, egg, meat pieces) must be listed separately even if mixed in.
+
+**When NOT to Apply:**
+If items are already visually and spatially distinct on the plate (e.g., rice, dal, roti served separately), list them as independent items **without parentheses**.
 
 ---
 
-#### 4. Scientific Calculation (Cooked vs. Raw)
-- *State Detection:* Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
-- *Database Matching:* Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
-- *Yield Logic:* If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3×) before calculating macros.
+### STEP 2: QUANTITY ESTIMATION
 
----
+#### 2.1 Scale Calibration
+- **Identify Anchors:** Scan the image for intrinsic reference objects to determine physical scale. Look for standard cutlery (spoons ~14–16 cm), glassware, standard dinner plates (25–28 cm), or standard food item sizes.
+- **Texture Analysis:** Analyze surface texture and glossiness. High sheen indicates added oils, butters, or glazes. Adjust the calorie density of the relevant parent dish or component accordingly. Do NOT list oils separately.
 
-#### 5. Quantification (User-Friendly & Editable)
+#### 2.2 Estimate Quantities
+Using the scale references identified above, estimate the volume or count of each identified item.
 
-##### Protein Sources ONLY (meat, fish, paneer, tofu, eggs, clearly countable nuts)
+#### 2.3 Quantity Display Formats
+
+**Protein Sources ONLY** (meat, fish, paneer, tofu, eggs, clearly countable nuts):
 - Use format: \`[count] [unit] ([grams])\`
-  - Examples:
-    - \`3 pieces (150 gms)\`
-    - \`1 breast (180 gms)\`
-    - \`8 cubes (100 gms)\`
-    - \`2 tbsp peanuts (20 gms)\`
+- Examples: \`3 pieces (150 gms)\`, \`1 breast (180 gms)\`, \`8 cubes (100 gms)\`, \`2 tbsp peanuts (20 gms)\`
 
-##### Carbohydrates
-- Use count or volume only (**NO grams**):
-  - \`1.5 cups\`, \`2 pieces\`, \`3 slices\`
+**Carbohydrates:**
+- Use count or volume only (**NO grams**): \`1.5 cups\`, \`2 pieces\`, \`3 slices\`
 
-##### Vegetables
-- Use count or volume only (**NO grams**):
-  - \`1 katori\`, \`6 florets\`, \`1/2 cup\`
+**Vegetables:**
+- Use count or volume only (**NO grams**): \`1 katori\`, \`6 florets\`, \`1/2 cup\`
 
-##### Sauces / Curries / Gravies
-- Use volume only (**NO grams**):
-  - \`1 katori\`, \`3 tbsp\`
+**Sauces / Curries / Gravies:**
+- Use volume only (**NO grams**): \`1 katori\`, \`3 tbsp\`
 
-##### Absolute Rules
-- **Do NOT display grams for any non-protein item.**
-- **Do NOT use vague size descriptors** (palm-sized, fist-sized, etc.).
+**Absolute Rules:**
+- Do NOT display grams for any non-protein item.
+- Do NOT use vague size descriptors (palm-sized, fist-sized, etc.).
 - All quantities must be concrete, measurable, and user-editable.
+
+---
+
+### STEP 3: MACRO CALCULATION
+
+- **State Detection:** Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
+- **Database Matching:** Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
+- **Yield Logic:** If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3×) before calculating macros.
 
 ---
 

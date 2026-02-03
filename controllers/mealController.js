@@ -303,8 +303,8 @@ async function updateMeal(req, res) {
           : aiResult.quantity.value;
         const quantityUnit = aiResult.quantity.unit;
         
-        // Update item name and quantity
-        item.name.final = aiResult.name;
+        // Update item name - use user-provided name, not AI suggestion
+        item.name.final = newItem;
 
         
         // Update final quantity if newQuantity is provided
@@ -778,12 +778,12 @@ function bulkEditItems(req, res) {
           });
           aiItemIndex++;
 
-          // Track name change
+          // Track name change - use user-provided name
           changes.push({
             itemId: itemId,
             field: 'name',
             previousValue: item.name.final || item.name.llm,
-            newValue: aiItem.name
+            newValue: newItem
           });
 
           // Determine the quantity value to use
@@ -805,8 +805,8 @@ function bulkEditItems(req, res) {
             });
           }
 
-          // Update item name and quantity
-          item.name.final = aiItem.name;
+          // Update item name - use user-provided name, not AI suggestion
+          item.name.final = newItem;
           item.quantity.final = {
             value: quantityValue,
             unit: quantityUnit
