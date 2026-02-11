@@ -192,7 +192,7 @@ class AuthService {
     
     // DLT template message - must match your registered DLT template exactly
     // Example template: "Your OTP is {#var#}. Valid for 15 minutes. Do not share with anyone. - CalClub"
-    const message = `Your OTP is ${otp}. Valid for 15 minutes. Do not share with anyone. - CalClub`;
+    const message = `Your OTP is ${otp}. Valid for 15 minutes. Do not share with anyone. - Cal Club`;
 
     try {
       const requestBody = {

@@ -10,6 +10,7 @@ const routes = {
   'POST /meals/bulk-edit': mealController.bulkEditItems,
   'GET /meals/summary/daily': mealController.getDailySummary,
   'GET /meals/calendar': mealController.getCalendarData,
+  'GET /meals/suggestions': mealController.getMealSuggestions,
   // Audit routes
   'GET /meals/audit/summary': mealController.getUserAuditSummary
 };
@@ -28,8 +29,12 @@ function mealRoutes(req, res) {
 
   // If exact match not found, try to match parameterized routes
   if (!handler) {
+    // Check for /meals/:mealId/clone pattern (clone/duplicate a meal)
+    if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/clone$/)) {
+      handler = mealController.cloneMeal;
+    }
     // Check for /meals/:mealId/items pattern (add item to meal)
-    if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/items$/)) {
+    else if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/items$/)) {
       handler = mealController.addItemToMeal;
     }
     // Check for /meals/:mealId/items/:itemId pattern (delete item from meal)

@@ -90,6 +90,16 @@ const mealSchema = new mongoose.Schema({
   deletedAt: {
     type: Date,
     default: null
+  },
+  source: {
+    type: String,
+    enum: ['llm', 'cloned'],
+    default: 'llm'
+  },
+  clonedFrom: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Meal',
+    default: null
   }
 }, {
   timestamps: true

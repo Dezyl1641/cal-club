@@ -167,7 +167,7 @@ class AppFormatService {
     const caloriesBurnt = Math.max(0, calorieGoal - todayData.totalCalories);
     
     return {
-      title: "CalClub",
+      title: "Cal Club",
       icon: "fire",
       caloriesBurnt: parseFloat(caloriesBurnt.toFixed(2))
     };

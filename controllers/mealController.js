@@ -1426,6 +1426,224 @@ async function deleteItemFromMeal(req, res) {
   }
 }
 
+// ─── Meal Suggestions & Clone ───
+
+// Configurable defaults (can be overridden via query params)
+const SUGGESTION_HOUR_WINDOW = 2;  // ±X hours around current time
+const SUGGESTION_DAY_WINDOW  = 7;  // look back Y days
+
+/**
+ * GET /meals/suggestions?hourWindow=2&dayWindow=7
+ *
+ * Returns distinct past meals that were captured within ±hourWindow of
+ * the current IST time-of-day, over the previous dayWindow days.
+ * Excludes today and soft-deleted meals.
+ */
+async function getMealSuggestions(req, res) {
+  try {
+    const userId = req.user.userId;
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const hourWindow = parseInt(url.searchParams.get('hourWindow')) || SUGGESTION_HOUR_WINDOW;
+    const dayWindow  = parseInt(url.searchParams.get('dayWindow'))  || SUGGESTION_DAY_WINDOW;
+
+    // Current IST hour & minute
+    const now = new Date();
+    const istParts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).formatToParts(now);
+
+    const currentHour   = parseInt(istParts.find(p => p.type === 'hour').value);
+    const currentMinute = parseInt(istParts.find(p => p.type === 'minute').value);
+    const currentMinuteOfDay = currentHour * 60 + currentMinute;
+
+    // Time-of-day window in minutes
+    const windowMinutes = hourWindow * 60;
+    const windowStart   = currentMinuteOfDay - windowMinutes; // can be negative
+    const windowEnd     = currentMinuteOfDay + windowMinutes; // can exceed 1440
+
+    // Date boundaries: from (today - dayWindow days) to start of today (IST)
+    const istYear  = parseInt(istParts.find(p => p.type === 'year').value);
+    const istMonth = parseInt(istParts.find(p => p.type === 'month').value) - 1;
+    const istDay   = parseInt(istParts.find(p => p.type === 'day').value);
+
+    // Start of today IST in UTC
+    const istOffsetMs = 5.5 * 60 * 60 * 1000;
+    const todayStartUTC = new Date(Date.UTC(istYear, istMonth, istDay) - istOffsetMs);
+
+    // Start of the lookback window
+    const lookbackStartUTC = new Date(todayStartUTC.getTime() - dayWindow * 24 * 60 * 60 * 1000);
+
+    console.log(`📋 [SUGGESTIONS] userId=${userId}, hourWindow=±${hourWindow}h, dayWindow=${dayWindow}d`);
+    console.log(`📋 [SUGGESTIONS] Current IST time: ${currentHour}:${String(currentMinute).padStart(2, '0')}`);
+    console.log(`📋 [SUGGESTIONS] Time-of-day window: ${Math.floor(Math.max(0, windowStart) / 60)}:${String(Math.max(0, windowStart) % 60).padStart(2, '0')} – ${Math.floor(Math.min(1439, windowEnd) / 60)}:${String(Math.min(1439, windowEnd) % 60).padStart(2, '0')} IST`);
+    console.log(`📋 [SUGGESTIONS] Date range: ${lookbackStartUTC.toISOString()} → ${todayStartUTC.toISOString()}`);
+
+    // Fetch candidate meals from the date range (excluding today, excluding deleted)
+    const candidates = await Meal.find({
+      userId,
+      capturedAt: { $gte: lookbackStartUTC, $lt: todayStartUTC },
+      deletedAt: null
+    }).sort({ capturedAt: -1 }).lean();
+
+    console.log(`📋 [SUGGESTIONS] Found ${candidates.length} candidate meals in date range`);
+
+    // Filter by IST time-of-day window
+    const suggestions = candidates.filter(meal => {
+      const mealISTParts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      }).formatToParts(new Date(meal.capturedAt));
+
+      const mealHour   = parseInt(mealISTParts.find(p => p.type === 'hour').value);
+      const mealMinute = parseInt(mealISTParts.find(p => p.type === 'minute').value);
+      const mealMinuteOfDay = mealHour * 60 + mealMinute;
+
+      // Handle wrap-around midnight (e.g., window 23:00–01:00)
+      if (windowStart < 0) {
+        return mealMinuteOfDay >= (windowStart + 1440) || mealMinuteOfDay <= windowEnd;
+      }
+      if (windowEnd >= 1440) {
+        return mealMinuteOfDay >= windowStart || mealMinuteOfDay <= (windowEnd - 1440);
+      }
+      return mealMinuteOfDay >= windowStart && mealMinuteOfDay <= windowEnd;
+    });
+
+    console.log(`📋 [SUGGESTIONS] ${suggestions.length} meals match the time-of-day window`);
+
+    // Format each suggestion using mealFormatter
+    const formatted = suggestions.map(meal => {
+      // mealFormatter expects a mongoose-like object; lean() returns plain object which works
+      const response = mealFormatter.formatMealResponse(meal);
+      // Add the date of the original meal for context
+      response.originalDate = mealFormatter.formatTimestampInIST(meal.capturedAt);
+      response.source = meal.source || 'llm';
+      return response;
+    });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      count: formatted.length,
+      hourWindow,
+      dayWindow,
+      suggestions: formatted
+    }));
+
+  } catch (error) {
+    reportError(error, { req });
+    console.error('Error getting meal suggestions:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to get meal suggestions', details: error.message }));
+  }
+}
+
+/**
+ * POST /meals/:mealId/clone
+ *
+ * Clones an existing meal as a new meal for today (IST).
+ * Sets source='cloned' and clonedFrom=originalMealId so it can be
+ * distinguished from LLM-analysed meals.
+ */
+async function cloneMeal(req, res) {
+  try {
+    const userId = req.user.userId;
+    const basePath = req.url.split('?')[0];
+    const pathParts = basePath.split('/');
+    // /meals/:mealId/clone → ['', 'meals', mealId, 'clone']
+    const mealId = pathParts[2];
+
+    if (!mealId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'mealId is required' }));
+      return;
+    }
+
+    // Find the original meal
+    const originalMeal = await Meal.findOne({ _id: mealId, userId, deletedAt: null });
+    if (!originalMeal) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Meal not found' }));
+      return;
+    }
+
+    const dateUtils = require('../utils/dateUtils');
+    const nowIST = dateUtils.getCurrentDateInIST();
+
+    // Generate new unique IDs for each item
+    const clonedItems = originalMeal.items.map((item, index) => ({
+      id: `item_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 5)}`,
+      name: {
+        llm: item.name?.llm || null,
+        final: item.name?.final || null
+      },
+      quantity: {
+        llm: item.quantity?.llm ? {
+          value: item.quantity.llm.value,
+          unit: item.quantity.llm.unit,
+          normalized: item.quantity.llm.normalized ? {
+            value: item.quantity.llm.normalized.value,
+            unit: item.quantity.llm.normalized.unit
+          } : undefined
+        } : undefined,
+        final: item.quantity?.final ? {
+          value: item.quantity.final.value,
+          unit: item.quantity.final.unit
+        } : { value: null, unit: null }
+      },
+      nutrition: {
+        calories: { llm: item.nutrition?.calories?.llm || null, final: item.nutrition?.calories?.final || null },
+        protein:  { llm: item.nutrition?.protein?.llm || null,  final: item.nutrition?.protein?.final || null },
+        carbs:    { llm: item.nutrition?.carbs?.llm || null,    final: item.nutrition?.carbs?.final || null },
+        fat:      { llm: item.nutrition?.fat?.llm || null,      final: item.nutrition?.fat?.final || null }
+      },
+      confidence: item.confidence || null
+    }));
+
+    // Create the cloned meal
+    const clonedMeal = new Meal({
+      userId,
+      capturedAt: nowIST,
+      photos: originalMeal.photos || [],
+      llmVersion: originalMeal.llmVersion || null,
+      llmModel: originalMeal.llmModel || null,
+      name: originalMeal.name,
+      totalNutrition: {
+        calories: { llm: originalMeal.totalNutrition?.calories?.llm || null, final: originalMeal.totalNutrition?.calories?.final || null },
+        protein:  { llm: originalMeal.totalNutrition?.protein?.llm || null,  final: originalMeal.totalNutrition?.protein?.final || null },
+        carbs:    { llm: originalMeal.totalNutrition?.carbs?.llm || null,    final: originalMeal.totalNutrition?.carbs?.final || null },
+        fat:      { llm: originalMeal.totalNutrition?.fat?.llm || null,      final: originalMeal.totalNutrition?.fat?.final || null }
+      },
+      items: clonedItems,
+      notes: originalMeal.notes || '',
+      userApproved: false,
+      inputTokens: null,
+      outputTokens: null,
+      source: 'cloned',
+      clonedFrom: originalMeal._id
+    });
+
+    const savedMeal = await clonedMeal.save();
+    console.log(`📋 [CLONE] Meal ${mealId} cloned as ${savedMeal._id} for user ${userId}`);
+
+    // Format response using standard formatter
+    const formattedResponse = mealFormatter.formatMealResponse(savedMeal);
+    formattedResponse.source = 'cloned';
+    formattedResponse.clonedFrom = mealId;
+
+    res.writeHead(201, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(formattedResponse));
+
+  } catch (error) {
+    reportError(error, { req });
+    console.error('Error cloning meal:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to clone meal', details: error.message }));
+  }
+}
+
 module.exports = {
   createMeal,
   getMeals,
@@ -1439,5 +1657,7 @@ module.exports = {
   getAuditEntry,
   getUserAuditSummary,
   addItemToMeal,
-  deleteItemFromMeal
+  deleteItemFromMeal,
+  getMealSuggestions,
+  cloneMeal
 }; 

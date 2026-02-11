@@ -466,6 +466,366 @@ Return only valid JSON, no additional text.`;
     }
   }
 
+  // ─── V2: Two-step analysis (Quantity → Calories) ───
+
+  /**
+   * STEP 1: Identify food items and estimate quantities (NO nutrition).
+   * Works for image, image+hint, and text-only inputs.
+   */
+  static async analyzeQuantityWithGemini(imageUrl, hint) {
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [GEMINI-V2-STEP1] Using model: ${modelName} for quantity analysis`);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { temperature: 0.1 }
+    });
+
+    let prompt = '';
+    const parts = [];
+
+    if (imageUrl) {
+      // IMAGE CASE (with or without hint)
+      const inputDataSection = hint
+        ? `1. *Image:* Photo of a meal (served state).\n2. *User Hint (Optional):* Text provided by the user describing the meal: "${hint}"`
+        : `1. *Image:* Photo of a meal (served state).`;
+
+      prompt = `### ROLE
+You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to identify food items and estimate quantities from food images with high precision.
+
+---
+
+### INPUT DATA
+${inputDataSection}
+
+---
+
+### STEP 1: ITEM IDENTIFICATION
+
+#### 1.1 Visual Identification
+- Segment the image and identify food items that are **calorically meaningful and user-editable**.
+- **Be Specific:** Do not be generic in identifying items, as calorie values differ (e.g., "bread" vs "sourdough bread").
+
+#### 1.2 Context Integration
+- **Context Usage:** Use the *User Hint* (if provided) to resolve ambiguities (e.g., "made with oat milk" vs "cow milk").
+- **Conflict Resolution:** If the User Hint contradicts strong visual evidence (e.g., user says "salad" but image shows "pizza"), **prioritize the User Hint** to prevent false tracking.
+
+#### 1.3 Component Breakdown for Composite Dishes
+
+**When to Apply:**
+Apply only to **commonly named single dishes** where components are **cooked or mixed together** and users would reasonably want to edit components independently (e.g., biryani, curry with protein, pasta, noodle bowls).
+
+**Format:**
+List each component as a **separate top-level item** using: **\`Component (dish name)\`**
+
+Example: \`Chicken (chicken biryani)\`, \`Rice (chicken biryani)\`
+
+**When decomposing, output ONLY the components. Never list the parent dish as a separate item.**
+
+**Key Components Only:**
+Decompose **only primary caloric components**:
+- Protein
+- Base carb (rice, noodles, bread)
+- Sauce / curry / gravy (if substantial)
+
+Do **NOT** break dishes into ingredient-level elements such as onion, tomato, spices, masala, tempering, or cooking bases.
+
+**Curry-Based Dishes:**
+Represent curry dishes as:
+- \`Protein (dish name)\`
+- \`Curry/Gravy (dish name)\`
+
+Curry/gravy includes oil, base, and sauce calories. Do NOT list curry ingredients separately.
+
+❌ Do NOT output: \`Chicken (chicken curry)\`, \`Curry (chicken curry)\`, AND \`Chicken curry\` together.
+
+**Minor Elements & Absorption Rule:**
+Minor toppings, garnishes, condiments, or sprinkles (e.g., namkeen, fried onions, herbs) must **NOT** be listed separately. Calories from such elements must be **absorbed into the parent dish or component**.
+
+**Exception:** Clearly countable protein sources (e.g., peanuts, paneer cubes, egg, meat pieces) must be listed separately even if mixed in.
+
+**When NOT to Apply:**
+If items are already visually and spatially distinct on the plate (e.g., rice, dal, roti served separately), list them as independent items **without parentheses**.
+
+---
+
+### STEP 2: QUANTITY ESTIMATION
+
+#### 2.1 Scale Calibration
+- **Identify Anchors:** Scan the image for intrinsic reference objects to determine physical scale. Look for standard cutlery (spoons ~14–16 cm), glassware, standard dinner plates (25–28 cm), or standard food item sizes.
+- **Texture Analysis:** Analyze surface texture and glossiness. High sheen indicates added oils, butters, or glazes. Note this for later calorie adjustment. Do NOT list oils separately.
+
+#### 2.2 Estimate Quantities
+Using the scale references identified above, estimate the volume or count of each identified item.
+
+#### 2.3 Quantity Display Formats
+
+**Protein Sources ONLY** (meat, fish, paneer, tofu, eggs, clearly countable nuts):
+- Use format: \`[count] [unit] ([grams])\`
+- Examples: \`3 pieces (150 gms)\`, \`1 breast (180 gms)\`, \`8 cubes (100 gms)\`, \`2 tbsp peanuts (20 gms)\`
+
+**Carbohydrates:**
+- Use count or volume only (**NO grams**): \`1.5 cups\`, \`2 pieces\`, \`3 slices\`
+
+**Vegetables:**
+- Use count or volume only (**NO grams**): \`1 katori\`, \`6 florets\`, \`1/2 cup\`
+
+**Sauces / Curries / Gravies:**
+- Use volume only (**NO grams**): \`1 katori\`, \`3 tbsp\`
+
+**Absolute Rules:**
+- Do NOT display grams for any non-protein item.
+- Do NOT use vague size descriptors (palm-sized, fist-sized, etc.).
+- All quantities must be concrete, measurable, and user-editable.
+
+---
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
+
+{
+  "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Chicken Biryani')",
+  "items": [
+    {
+      "name": "Item Name (e.g., Grilled Chicken Breast)",
+      "quantity": {
+        "value": 1,
+        "unit": "breast (180 gms)/cups/pieces/katori/etc"
+      },
+      "confidence": 0.0-1.0
+    }
+  ]
+}
+
+**IMPORTANT:** Do NOT include any nutrition/calorie fields. Only identify items and estimate quantities.
+
+Return only valid JSON, no additional text.`;
+      parts.push({ text: prompt });
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
+
+    } else if (hint && !imageUrl) {
+      // TEXT ONLY CASE
+      prompt = `### ROLE
+You are an expert AI Nutritionist and Database Specialist. Your goal is to parse natural language food logs into structured item and quantity data.
+
+### INPUT DATA
+User text string: "${hint}"
+
+### INSTRUCTIONS
+
+1. *Entity & Quantity Extraction:*
+   * Parse the text to identify the *Food Item* and the *Quantity/Unit*.
+   * Default Logic: If quantity is unspecified (e.g., "an apple"), assume *1 Standard Serving* (e.g., 1 Medium Apple).
+
+2. *Brand vs. Generic Logic:*
+   * *Explicit Brand:* If the user names a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), you MUST identify that specific brand's product.
+     * Note on Scoops: Brand-specific scoops vary (e.g., one scoop might be 30g, another 45g). Use the specific brand's standard serving size.
+   * *Generic:* If no brand is mentioned (e.g., "one apple," "boiled egg"), use standard *Medium* size.
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
+
+{
+  "mealName": "Overall meal name (e.g., 'The Whole Truth Protein Shake', 'Banana and Eggs')",
+  "items": [
+    {
+      "name": "Item Name (e.g., The Whole Truth Protein - Chocolate)",
+      "quantity": {
+        "value": 1,
+        "unit": "Scoop/piece/cup/serving/etc"
+      },
+      "confidence": 0.0-1.0
+    }
+  ]
+}
+
+**IMPORTANT:** Do NOT include any nutrition/calorie fields. Only identify items and estimate quantities.
+
+Return only valid JSON, no additional text.`;
+      parts.push({ text: prompt });
+    }
+
+    try {
+      console.log(`🤖 [GEMINI-V2-STEP1] Sending quantity analysis request with ${parts.length} parts`);
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts }]
+      });
+
+      const responseText = result.response.text();
+      console.log(`🤖 [GEMINI-V2-STEP1] Response received, length: ${responseText?.length || 0}`);
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response from Gemini API (quantity step)');
+      }
+
+      const usageMetadata = result.response.usageMetadata;
+      return {
+        response: responseText,
+        prompt,
+        tokens: {
+          input: usageMetadata?.promptTokenCount || null,
+          output: usageMetadata?.candidatesTokenCount || null
+        }
+      };
+    } catch (error) {
+      console.error('❌ [GEMINI-V2-STEP1] API Error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * STEP 2: Given identified items with quantities, calculate nutrition / calories.
+   * @param {Object} quantityResult - Parsed JSON from step 1 (mealName, items[{name, quantity, confidence}])
+   */
+  static async analyzeCaloriesFromQuantityWithGemini(quantityResult) {
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [GEMINI-V2-STEP2] Using model: ${modelName} for calorie calculation`);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { temperature: 0.1 }
+    });
+
+    const itemsList = quantityResult.items.map((item, i) =>
+      `${i + 1}. ${item.name} — ${item.quantity.value} ${item.quantity.unit}`
+    ).join('\n');
+
+    const prompt = `### ROLE
+You are an expert AI Nutritionist. You are given a list of identified food items with estimated quantities. Your ONLY job is to calculate accurate macro-nutrients for each item.
+
+---
+
+### INPUT DATA
+Meal Name: "${quantityResult.mealName}"
+
+Items (with quantities):
+${itemsList}
+
+---
+
+### MACRO CALCULATION INSTRUCTIONS
+
+- **State Detection:** Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
+- **Database Matching:** Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
+- **Yield Logic:** If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3×) before calculating macros.
+- **Hidden Calories:** If an item's description or name implies oil, butter, or gravy (e.g., "Curry/Gravy"), account for added fats in the calorie calculation.
+- **Brand Logic:** If the item name contains a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), use that specific brand's nutritional values. Brand-specific scoops vary — use the brand's standard serving size.
+
+---
+
+### OUTPUT FORMAT
+Return ONLY a raw JSON object with this exact structure:
+
+{
+  "mealName": "${quantityResult.mealName}",
+  "items": [
+    {
+      "name": "Item Name (exactly as provided in input)",
+      "quantity": {
+        "value": 1,
+        "unit": "unit as provided in input"
+      },
+      "nutrition": {
+        "calories": 250.5,
+        "protein": 25.0,
+        "carbs": 15.0,
+        "fat": 10.5
+      },
+      "confidence": 0.0-1.0
+    }
+  ]
+}
+
+**CRITICAL REQUIREMENTS:**
+- You MUST keep item names and quantities EXACTLY as provided in the input. Do NOT rename or re-estimate.
+- You MUST calculate and provide ACTUAL nutrition values (not zeros) for EVERY item based on:
+  * The specific food item identified
+  * The quantity provided
+  * Standard nutritional databases (USDA, Indian food composition tables)
+  * Cooking method and preparation state (cooked vs raw)
+  * Account for added oils, butter, or cooking fats in your calculations
+- Calculate values based on the quantity provided (e.g., if quantity is "3 pieces (150 gms)", calculate nutrition for 150g of that item)
+- Do NOT return 0 for nutrition values - every food item has nutritional content
+- Round values to 1 decimal place for precision
+- The number of items in the output MUST match the number of items in the input
+
+Return only valid JSON, no additional text.`;
+
+    try {
+      console.log(`🤖 [GEMINI-V2-STEP2] Sending calorie calculation request`);
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      });
+
+      const responseText = result.response.text();
+      console.log(`🤖 [GEMINI-V2-STEP2] Response received, length: ${responseText?.length || 0}`);
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response from Gemini API (calorie step)');
+      }
+
+      const usageMetadata = result.response.usageMetadata;
+      return {
+        response: responseText,
+        prompt,
+        tokens: {
+          input: usageMetadata?.promptTokenCount || null,
+          output: usageMetadata?.candidatesTokenCount || null
+        }
+      };
+    } catch (error) {
+      console.error('❌ [GEMINI-V2-STEP2] API Error:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * V2 entry point: chains analyzeQuantity → analyzeCalories, then saves meal.
+   * Drop-in replacement for analyzeFoodCalories with same saving behaviour.
+   */
+  static async analyzeFoodCaloriesV2(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
+    try {
+      const llmModel = 'gemini-2.5-flash';
+
+      // ── Step 1: Identify items + quantities ──
+      console.log('🤖 [V2] Starting Step 1: Quantity analysis');
+      const quantityRaw = await this.analyzeQuantityWithGemini(imageUrl, hint);
+      const quantityParsed = this.parseAIResult(quantityRaw.response);
+      console.log(`🤖 [V2] Step 1 complete — ${quantityParsed.items.length} items identified`);
+
+      // ── Step 2: Calculate calories from quantities ──
+      console.log('🤖 [V2] Starting Step 2: Calorie calculation');
+      const caloriesRaw = await this.analyzeCaloriesFromQuantityWithGemini(quantityParsed);
+      const caloriesResult = caloriesRaw.response; // raw JSON string — same format as V1 output
+      console.log('🤖 [V2] Step 2 complete');
+
+      // Aggregate token usage from both steps
+      const tokens = {
+        input: (quantityRaw.tokens.input || 0) + (caloriesRaw.tokens.input || 0),
+        output: (quantityRaw.tokens.output || 0) + (caloriesRaw.tokens.output || 0)
+      };
+
+      // ── Save meal (same as V1) ──
+      let savedMeal = null;
+      if (userId) {
+        const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
+        savedMeal = await this.saveMealData(userId, imageReference, caloriesResult, provider, llmModel, additionalData, tokens);
+      }
+
+      return {
+        calories: caloriesResult,
+        provider,
+        mealId: savedMeal ? savedMeal._id : null,
+        // V2 extras — expose intermediate quantity result
+        quantityResult: quantityParsed,
+        steps: {
+          step1_tokens: quantityRaw.tokens,
+          step2_tokens: caloriesRaw.tokens
+        }
+      };
+    } catch (error) {
+      throw new Error(`Failed to analyze food (V2): ${error.message}`);
+    }
+  }
+
   static async analyzeFoodItemWithOpenAI(itemName, currentMealName, previousItemName, originalUnit) {
     const startTime = Date.now();
     const modelName = 'gpt-4o';
