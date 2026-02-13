@@ -58,6 +58,37 @@ class OnboardingService {
   }
 
   /**
+   * Update user's name from onboarding answer (question 6908fe66896ccf24778c9073)
+   * @param {string} userId - User ID
+   * @param {string} name - Name value
+   */
+  static async updateUserName(userId, name) {
+    try {
+      const User = require('../models/schemas/User');
+
+      const userIdObjectId = typeof userId === 'string'
+        ? new mongoose.Types.ObjectId(userId)
+        : userId;
+
+      const trimmedName = typeof name === 'string' ? name.trim() : String(name || '');
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userIdObjectId,
+        { name: trimmedName || null },
+        { new: true }
+      );
+
+      if (updatedUser) {
+        console.log(`✅ Updated name for user ${userId}: ${trimmedName}`);
+      } else {
+        console.warn(`⚠️ User not found: ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error updating user name:', error);
+    }
+  }
+
+  /**
    * Update user's target goal in goals
    * @param {string} userId - User ID
    * @param {string} targetGoal - Target goal value
@@ -324,6 +355,25 @@ class OnboardingService {
             // Update user's target goal in background (don't await to avoid blocking response)
             this.updateUserTargetGoal(targetGoalAnswer.userId, goalString).catch(err => {
               console.error('Background target goal update failed:', err);
+            });
+          }
+        }
+      }
+
+      // Set user name when name question is answered (questionId: 6908fe66896ccf24778c9073)
+      const NAME_QUESTION_ID = '6908fe66896ccf24778c9073';
+      const nameAnswer = answers.find(answer => {
+        const questionIdStr = answer.questionId?.toString();
+        return questionIdStr === NAME_QUESTION_ID;
+      });
+
+      if (nameAnswer && nameAnswer.values && nameAnswer.values.length > 0) {
+        const nameValue = nameAnswer.values[0];
+        if (nameValue !== null && nameValue !== undefined) {
+          const nameString = typeof nameValue === 'string' ? nameValue : String(nameValue);
+          if (nameString.trim()) {
+            this.updateUserName(nameAnswer.userId, nameString).catch(err => {
+              console.error('Background user name update failed:', err);
             });
           }
         }
