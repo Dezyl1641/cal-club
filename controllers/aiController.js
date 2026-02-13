@@ -3,6 +3,7 @@ const parseBody = require('../utils/parseBody');
 const mealFormatter = require('../utils/mealFormatter');
 const dateUtils = require('../utils/dateUtils');
 const { reportError } = require('../utils/sentryReporter');
+const { isTestUser } = require('../config/testUsers');
 
 function foodCalories(req, res) {
   parseBody(req, async (err, data) => {
@@ -21,7 +22,11 @@ function foodCalories(req, res) {
     };
 
     try {
-      const result = await AiService.analyzeFoodCalories(data.url || null, data.hint || null, provider, req.user.userId, additionalData);
+      // Test users (env-based) use dual-prompt V2 flow; others use single-prompt
+      const useV2 = isTestUser(req.user.userId);
+      const result = useV2
+        ? await AiService.analyzeFoodCaloriesV2(data.url || null, data.hint || null, provider, req.user.userId, additionalData)
+        : await AiService.analyzeFoodCalories(data.url || null, data.hint || null, provider, req.user.userId, additionalData);
       
       // If a meal was saved, format it according to the new response format
       if (result.mealId) {

@@ -355,17 +355,23 @@ class AppFormatService {
 
   /**
    * Format recommendation widget for app calendar
+   * Only enabled for env-based test users (TEST_USER_IDS).
    * @param {ObjectId} userId - User ID
    * @returns {Promise<Object|null>} - Recommendation widget or null
    */
   static async formatRecommendationWidget(userId) {
     try {
+      const { isTestUser } = require('../config/testUsers');
+      if (!isTestUser(userId)) {
+        return null;
+      }
       const recommendationData = await RecommendationService.getActiveRecommendation(userId);
       
       if (!recommendationData) {
         return null;
       }
 
+      // Expected frontend format (app calendar / recommendation widget)
       return {
         widgetType: "recommendation_widget",
         widgetData: {

@@ -169,8 +169,13 @@ Calories Remaining: ${Math.round(caloriesRemaining)} kcal
       const usersWithMeals = await this.getUsersWithMealsToday(todayDate);
       console.log(`👥 [RECOMMENDATIONS] Found ${usersWithMeals.length} users with meals today`);
 
-      if (usersWithMeals.length === 0) {
-        console.log('⚠️ [RECOMMENDATIONS] No users with meals today');
+      // Restrict to env-based test users only
+      const { isTestUser } = require('../config/testUsers');
+      const usersToProcess = usersWithMeals.filter(id => isTestUser(id));
+      console.log(`👥 [RECOMMENDATIONS] Processing recommendations for ${usersToProcess.length} test users only`);
+
+      if (usersToProcess.length === 0) {
+        console.log('⚠️ [RECOMMENDATIONS] No test users with meals today');
         return;
       }
 
@@ -178,7 +183,7 @@ Calories Remaining: ${Math.round(caloriesRemaining)} kcal
       let successCount = 0;
       let errorCount = 0;
 
-      for (const userId of usersWithMeals) {
+      for (const userId of usersToProcess) {
         for (const recommendation of recommendationsToProcess) {
           try {
             await this.createUserRecommendation(userId, recommendation, todayDate);
