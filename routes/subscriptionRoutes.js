@@ -1,6 +1,9 @@
 const subscriptionController = require('../controllers/subscriptionController');
 
 const routes = {
+  // Unified subscription status (RevenueCat + local fallback)
+  'GET /subscriptions/status': subscriptionController.getSubscriptionStatus,
+
   // Razorpay subscription routes
   'POST /subscriptions': subscriptionController.createSubscription,
   'GET /subscriptions': subscriptionController.getSubscription,

@@ -5,6 +5,7 @@ const User = require('../models/schemas/User');
 const Question = require('../models/schemas/Question');
 const UserQuestion = require('../models/schemas/UserQuestion');
 const Membership = require('../models/schemas/Membership');
+const { checkMembership } = require('../utils/membershipCheck');
 
 // Interfaces for type consistency
 const AppBarData = {
@@ -136,6 +137,9 @@ class AppFormatService {
       
       // Get recommendation widget data
       const recommendationWidget = await this.formatRecommendationWidget(userId);
+
+      // Get membership status for paywall / membership info
+      const membershipStatus = await checkMembership(userId);
       
       // Format the response
       const widgets = [
@@ -149,6 +153,11 @@ class AppFormatService {
       
       // Add logged widget
       widgets.push(this.formatLoggedWidget(todayMeals));
+
+      // Add paywall widget if user does NOT have premium access
+      if (!membershipStatus.hasAccess) {
+        widgets.push(this.formatPaywallWidget());
+      }
       
       return {
         appBarData: this.formatAppBarData(todayData, goals.dailyCalories),
@@ -156,7 +165,12 @@ class AppFormatService {
         daySelectorData: this.formatDaySelectorData(currentDate),
         showFloatingActionButton: true,
         widgets: widgets,
-        footerData: this.formatFooterData()
+        footerData: this.formatFooterData(),
+        membership: {
+          isPremium: membershipStatus.isPremium,
+          isInTrial: membershipStatus.isInTrial,
+          expiresDate: membershipStatus.expiresDate
+        }
       };
     } catch (error) {
       throw new Error(`Failed to format app calendar data: ${error.message}`);
@@ -383,6 +397,22 @@ class AppFormatService {
       console.error('Error formatting recommendation widget:', error);
       return null; // Don't break the app if recommendation fails
     }
+  }
+
+  /**
+   * Format paywall widget shown when user has no active subscription.
+   * The client uses this to render the upgrade prompt / paywall overlay.
+   */
+  static formatPaywallWidget() {
+    return {
+      widgetType: "paywall_widget",
+      widgetData: {
+        heading: "Unlock Full Access",
+        description: "Track meals, get AI-powered nutrition insights, and reach your health goals.",
+        ctaText: "Start Free Trial",
+        ctaAction: "navigate_paywall"
+      }
+    };
   }
 
   static formatFooterData() {

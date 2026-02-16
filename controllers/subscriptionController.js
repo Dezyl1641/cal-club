@@ -959,6 +959,45 @@ async function restoreApplePurchases(req, res) {
   }
 }
 
+/**
+ * GET /subscriptions/status
+ * Returns unified subscription status from RevenueCat (or local fallback).
+ * The client can call this to know whether to show paywall or not.
+ */
+async function getSubscriptionStatus(req, res) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Authentication required' }));
+      return;
+    }
+
+    const { checkMembership } = require('../utils/membershipCheck');
+    const membership = await checkMembership(userId);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      membership: {
+        hasAccess: membership.hasAccess,
+        isPremium: membership.isPremium,
+        isInTrial: membership.isInTrial,
+        expiresDate: membership.expiresDate,
+        productIdentifier: membership.productIdentifier
+      }
+    }));
+  } catch (error) {
+    reportError(error, { req });
+    console.error('❌ [SUBSCRIPTION_STATUS] Error:', error.message);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: 'Failed to get subscription status',
+      details: error.message
+    }));
+  }
+}
+
 module.exports = {
   createSubscription,
   getSubscription,
@@ -969,5 +1008,6 @@ module.exports = {
   getGooglePlaySubscriptionStatus,
   verifyApplePurchase,
   getAppleSubscriptionStatus,
-  restoreApplePurchases
+  restoreApplePurchases,
+  getSubscriptionStatus
 };
