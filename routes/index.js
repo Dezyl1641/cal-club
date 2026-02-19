@@ -11,6 +11,7 @@ const goalRoutes = require('./goalRoutes');
 const userLogRoutes = require('./userLogRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const recommendationRoutes = require('./recommendationRoutes');
+const activityStoreRoutes = require('./activityStoreRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -90,6 +91,11 @@ function setupRoutes(req, res) {
       if (url.startsWith('/recommendations')) {
         return recommendationRoutes(req, res);
       }
+
+  // Activity store (sync / fetch)
+  if (url.startsWith('/activity-store')) {
+    return activityStoreRoutes(req, res);
+  }
 
   // Default 404
   res.writeHead(404, { 'Content-Type': 'application/json' });

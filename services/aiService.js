@@ -1142,7 +1142,7 @@ Return only valid JSON, no additional text.`;
       const dateUtils = require('../utils/dateUtils');
       const mealData = {
         userId,
-        capturedAt: additionalData.capturedAt ? new Date(additionalData.capturedAt) : dateUtils.getCurrentDateInIST(),
+        capturedAt: additionalData.capturedAt ? new Date(additionalData.capturedAt) : dateUtils.getCurrentDateTime(),
         photos: photos,
         llmVersion: '1.0',
         llmModel,

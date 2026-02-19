@@ -15,7 +15,7 @@ function foodCalories(req, res) {
 
     const provider = 'gemini' // hardcoding to gemini for now
     const additionalData = {  
-      capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateInIST(),
+      capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateTime(),
       width: data.width || null,
       height: data.height || null,
       notes: data.notes || ''
@@ -61,7 +61,7 @@ function foodCaloriesV2(req, res) {
 
     const provider = 'gemini';
     const additionalData = {
-      capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateInIST(),
+      capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateTime(),
       width: data.width || null,
       height: data.height || null,
       notes: data.notes || ''

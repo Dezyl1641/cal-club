@@ -13,6 +13,7 @@ async function connectToMongo() {
       require('../models/schemas/UserOtp');
       require('../models/schemas/UserAuthToken');
       require('../models/schemas/Meal');
+      require('../models/schemas/ActivityStore');
     }
     return mongoose.connection;
   } catch (err) {
