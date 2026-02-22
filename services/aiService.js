@@ -490,7 +490,7 @@ Return only valid JSON, no additional text.`;
         : `1. *Image:* Photo of a meal (served state).`;
 
       prompt = `### ROLE
-You are an expert AI Nutritionist and Computer Vision Analyst. Your goal is to identify food items and estimate quantities from food images with high precision.
+Food identification and portion estimation specialist. Identify food items in a photo and estimate quantities. Do NOT calculate calories or macros.
 
 ---
 
@@ -499,83 +499,43 @@ ${inputDataSection}
 
 ---
 
-### STEP 1: ITEM IDENTIFICATION
+### ITEM IDENTIFICATION
 
-#### 1.1 Visual Identification
-- Segment the image and identify food items that are **calorically meaningful and user-editable**.
-- **Be Specific:** Do not be generic in identifying items, as calorie values differ (e.g., "bread" vs "sourdough bread").
+**Naming:** Be specific when visually distinguishable (e.g., "jeera rice" not "rice", "sourdough bread" not "bread", "soba noodles" not "noodles"). Use general name when variant is unclear.
 
-#### 1.2 Context Integration
-- **Context Usage:** Use the *User Hint* (if provided) to resolve ambiguities (e.g., "made with oat milk" vs "cow milk").
-- **Conflict Resolution:** If the User Hint contradicts strong visual evidence (e.g., user says "salad" but image shows "pizza"), **prioritize the User Hint** to prevent false tracking.
+**Composite dish breakdown** — apply ONLY when components are cooked/mixed together or served in the same vessel/poured together on plate (e.g., biryani, pasta with sauce, curry with protein, burrito, poke bowl, noodle bowls):
+- Format: Component (parent dish name) — e.g., Chicken (chicken biryani), Rice (chicken biryani)
+- Sauce/gravy/curry is ONE component (includes all sub-ingredients within it).
+- Never list parent dish alongside its components.
+- Absorb garnishes and toppings into nearest component.
 
-#### 1.3 Component Breakdown for Composite Dishes
+Do not break down items served in separate vessels or clearly occupying distinct areas of the plate — list them independently without parentheses.
 
-**When to Apply:**
-Apply only to **commonly named single dishes** where components are **cooked or mixed together** and users would reasonably want to edit components independently (e.g., biryani, curry with protein, pasta, noodle bowls).
+**Packaged/branded items:** Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
 
-**Format:**
-List each component as a **separate top-level item** using: **\`Component (dish name)\`**
-
-Example: \`Chicken (chicken biryani)\`, \`Rice (chicken biryani)\`
-
-**When decomposing, output ONLY the components. Never list the parent dish as a separate item.**
-
-**Key Components Only:**
-Decompose **only primary caloric components**:
-- Protein
-- Base carb (rice, noodles, bread)
-- Sauce / curry / gravy (if substantial)
-
-Do **NOT** break dishes into ingredient-level elements such as onion, tomato, spices, masala, tempering, or cooking bases.
-
-**Curry-Based Dishes:**
-Represent curry dishes as:
-- \`Protein (dish name)\`
-- \`Curry/Gravy (dish name)\`
-
-Curry/gravy includes oil, base, and sauce calories. Do NOT list curry ingredients separately.
-
-❌ Do NOT output: \`Chicken (chicken curry)\`, \`Curry (chicken curry)\`, AND \`Chicken curry\` together.
-
-**Minor Elements & Absorption Rule:**
-Minor toppings, garnishes, condiments, or sprinkles (e.g., namkeen, fried onions, herbs) must **NOT** be listed separately. Calories from such elements must be **absorbed into the parent dish or component**.
-
-**Exception:** Clearly countable protein sources (e.g., peanuts, paneer cubes, egg, meat pieces) must be listed separately even if mixed in.
-
-**When NOT to Apply:**
-If items are already visually and spatially distinct on the plate (e.g., rice, dal, roti served separately), list them as independent items **without parentheses**.
+If no food is visible in the image (e.g., blurry, dark, empty plate, non-food photo), return { "mealName": "No food detected", "items": [] }.
 
 ---
 
-### STEP 2: QUANTITY ESTIMATION
+### QUANTITY ESTIMATION
 
-#### 2.1 Scale Calibration
-- **Identify Anchors:** Scan the image for intrinsic reference objects to determine physical scale. Look for standard cutlery (spoons ~14–16 cm), glassware, standard dinner plates (25–28 cm), or standard food item sizes.
-- **Texture Analysis:** Analyze surface texture and glossiness. High sheen indicates added oils, butters, or glazes. Note this for later calorie adjustment. Do NOT list oils separately.
+**Size references:**
+- Standard dinner plate: ~26 cm. Side/quarter plate: ~18 cm.
+- Small bowl: ~150 ml. Medium bowl: ~250 ml. Large bowl: ~400 ml. Glass: ~250 ml.
 
-#### 2.2 Estimate Quantities
-Using the scale references identified above, estimate the volume or count of each identified item.
+**Units by food type:**
+- Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count → 2 rotis, 3 slices
+- Rice/grains/pasta: cups → 1 cup, 0.75 cup
+- Soups/dal/curry/gravy/sauces: bowl size or tbsp → 1 small bowl, 3 tbsp
+- Cooked vegetables: bowl size → 0.5 small bowl
+- Protein (chicken, fish, paneer, tofu, meat): count + form → 3 boneless pieces, 2 bone-in pieces, 8 paneer cubes, 1 fillet, 2 whole eggs
+- Beverages: glass or cup → 1 glass
+- Fruits: count or cups → 1 banana, 0.5 cup grapes
 
-#### 2.3 Quantity Display Formats
-
-**Protein Sources ONLY** (meat, fish, paneer, tofu, eggs, clearly countable nuts):
-- Use format: \`[count] [unit] ([grams])\`
-- Examples: \`3 pieces (150 gms)\`, \`1 breast (180 gms)\`, \`8 cubes (100 gms)\`, \`2 tbsp peanuts (20 gms)\`
-
-**Carbohydrates:**
-- Use count or volume only (**NO grams**): \`1.5 cups\`, \`2 pieces\`, \`3 slices\`
-
-**Vegetables:**
-- Use count or volume only (**NO grams**): \`1 katori\`, \`6 florets\`, \`1/2 cup\`
-
-**Sauces / Curries / Gravies:**
-- Use volume only (**NO grams**): \`1 katori\`, \`3 tbsp\`
-
-**Absolute Rules:**
-- Do NOT display grams for any non-protein item.
-- Do NOT use vague size descriptors (palm-sized, fist-sized, etc.).
-- All quantities must be concrete, measurable, and user-editable.
+**Principles:**
+- Always count explicitly when items are individually distinguishable.
+- For scoopable/pourable foods, estimate area coverage on plate and convert to cups or bowl size.
+- When uncertain between two close quantities, choose the midpoint.
 
 ---
 
@@ -586,13 +546,25 @@ Return ONLY a raw JSON object with this exact structure:
   "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Chicken Biryani')",
   "items": [
     {
-      "name": "Item Name (e.g., Grilled Chicken Breast)",
+      "name": "Item Name",
       "quantity": {
         "value": 1,
-        "unit": "breast (180 gms)/cups/pieces/katori/etc"
+        "unit": "cups/pieces/small bowl/boneless pieces/etc"
       },
       "confidence": 0.0-1.0
     }
+  ]
+}
+
+### EXAMPLE
+
+{
+  "mealName": "Dal Rice with Roti & Aloo Gobi",
+  "items": [
+    { "name": "Steamed rice", "quantity": { "value": 1, "unit": "cup" }, "confidence": 0.9 },
+    { "name": "Dal", "quantity": { "value": 1, "unit": "small bowl" }, "confidence": 0.85 },
+    { "name": "Roti", "quantity": { "value": 2, "unit": "rotis" }, "confidence": 0.9 },
+    { "name": "Aloo gobi", "quantity": { "value": 0.5, "unit": "small bowl" }, "confidence": 0.8 }
   ]
 }
 
@@ -605,21 +577,38 @@ Return only valid JSON, no additional text.`;
     } else if (hint && !imageUrl) {
       // TEXT ONLY CASE
       prompt = `### ROLE
-You are an expert AI Nutritionist and Database Specialist. Your goal is to parse natural language food logs into structured item and quantity data.
+Food identification and portion estimation specialist. Identify food items from a text description and estimate quantities. Do NOT calculate calories or macros.
 
 ### INPUT DATA
 User text string: "${hint}"
 
-### INSTRUCTIONS
+### ITEM IDENTIFICATION
 
-1. *Entity & Quantity Extraction:*
-   * Parse the text to identify the *Food Item* and the *Quantity/Unit*.
-   * Default Logic: If quantity is unspecified (e.g., "an apple"), assume *1 Standard Serving* (e.g., 1 Medium Apple).
+**Naming:** Be specific when the user specifies (e.g., "jeera rice" not "rice", "sourdough bread" not "bread"). Use the user's exact terms when clear.
 
-2. *Brand vs. Generic Logic:*
-   * *Explicit Brand:* If the user names a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), you MUST identify that specific brand's product.
-     * Note on Scoops: Brand-specific scoops vary (e.g., one scoop might be 30g, another 45g). Use the specific brand's standard serving size.
-   * *Generic:* If no brand is mentioned (e.g., "one apple," "boiled egg"), use standard *Medium* size.
+**Brand vs. Generic Logic:**
+- If the user names a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), use the brand and product name. Use the brand's standard serving size for scoops/portions.
+- If no brand is mentioned (e.g., "one apple," "boiled egg"), use standard medium size.
+
+**Packaged/branded items:** Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
+
+**Composite dish breakdown** — apply ONLY when the user describes a single dish with mixed components (e.g., "chicken biryani", "pasta with sauce"):
+- Format: Component (parent dish name) — e.g., Chicken (chicken biryani), Rice (chicken biryani)
+- Sauce/gravy/curry is ONE component (includes all sub-ingredients within it).
+- Never list parent dish alongside its components.
+
+### QUANTITY ESTIMATION
+
+**Default Logic:** If quantity is unspecified (e.g., "an apple"), assume 1 standard serving (e.g., 1 medium apple).
+
+**Units by food type:**
+- Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count → 2 rotis, 3 slices
+- Rice/grains/pasta: cups → 1 cup, 0.75 cup
+- Soups/dal/curry/gravy/sauces: bowl size or tbsp → 1 small bowl, 3 tbsp
+- Cooked vegetables: bowl size → 0.5 small bowl
+- Protein (chicken, fish, paneer, tofu, meat): count + form → 3 boneless pieces, 8 paneer cubes, 1 fillet
+- Beverages: glass or cup → 1 glass
+- Fruits: count or cups → 1 banana, 0.5 cup grapes
 
 ### OUTPUT FORMAT
 Return ONLY a raw JSON object with this exact structure:
@@ -689,7 +678,7 @@ Return only valid JSON, no additional text.`;
     ).join('\n');
 
     const prompt = `### ROLE
-You are an expert AI Nutritionist. You are given a list of identified food items with estimated quantities. Your ONLY job is to calculate accurate macro-nutrients for each item.
+Nutrition calculator. Given identified food items with quantities, calculate macros (calories, protein, carbs, fat) per item.
 
 ---
 
@@ -701,13 +690,36 @@ ${itemsList}
 
 ---
 
-### MACRO CALCULATION INSTRUCTIONS
+### GRAM REFERENCE
 
-- **State Detection:** Assume items are in their *COOKED/SERVED* state unless obviously raw (like fruit).
-- **Database Matching:** Match estimated volumes to *Cooked* database values (e.g., "Steamed Rice", not "Raw Rice").
-- **Yield Logic:** If a cooked value is unavailable, estimate the raw weight by applying standard cooking yield factors (e.g., meat shrinks by ~25%, rice expands by ~3×) before calculating macros.
-- **Hidden Calories:** If an item's description or name implies oil, butter, or gravy (e.g., "Curry/Gravy"), account for added fats in the calorie calculation.
-- **Brand Logic:** If the item name contains a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), use that specific brand's nutritional values. Brand-specific scoops vary — use the brand's standard serving size.
+**Protein by form (cooked weight):**
+- 1 boneless piece (chicken/mutton) = 30g
+- 1 bone-in piece (chicken/mutton) = 50g (30g edible)
+- 1 drumstick = 75g (50g edible)
+- 1 fillet (fish) = 120g
+- 1 paneer cube = 12g
+- 1 prawn (medium) = 10g
+
+**Volume to grams:**
+- 1 cup = 180g, 1 tbsp = 15g, 1 glass = 250ml
+- Small bowl = 150g, Medium bowl = 250g, Large bowl = 400g
+
+---
+
+### CALCULATION STEPS
+
+1. **Classify each item:** Items with parentheses in the name (e.g., "Chicken (butter chicken)") are composite dish components. Items without parentheses are standalone.
+
+2. **For composite dish components:**
+   - **Protein component** (e.g., "Chicken (butter chicken)"): Use per-100g macros for that protein in its cooked form only — no sauce, no curry. Convert quantity to grams using protein form reference above.
+   - **Gravy/sauce component** (e.g., "Gravy (butter chicken)"): The bowl size is the total serving vessel including the protein. Subtract the protein weight from the bowl size to get gravy-only weight. Apply per-100g macros for that specific gravy/sauce (including its typical cooking oil, spices, and base ingredients) to the remaining weight.
+   - **Base carb component** (e.g., "Rice (chicken biryani)"): Use per-100g macros for that carb in its cooked state. Convert quantity to grams directly — no subtraction needed.
+
+3. **For standalone items:** Use per-100g macros for the item in its cooked/served state. Convert quantity to grams — use the reference above for protein and volume units; for countable items (roti, idli, bread, etc.), use your knowledge of standard weights.
+
+4. **Calculate per item:** macros = (grams / 100) x macros per 100g. Round calories to nearest integer, protein/carbs/fat to 1 decimal.
+
+5. **Brand Logic:** If the item name contains a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), use that specific brand's nutritional values. Brand-specific scoops vary — use the brand's standard serving size.
 
 ---
 
@@ -724,7 +736,7 @@ Return ONLY a raw JSON object with this exact structure:
         "unit": "unit as provided in input"
       },
       "nutrition": {
-        "calories": 250.5,
+        "calories": 250,
         "protein": 25.0,
         "carbs": 15.0,
         "fat": 10.5
@@ -736,16 +748,10 @@ Return ONLY a raw JSON object with this exact structure:
 
 **CRITICAL REQUIREMENTS:**
 - You MUST keep item names and quantities EXACTLY as provided in the input. Do NOT rename or re-estimate.
-- You MUST calculate and provide ACTUAL nutrition values (not zeros) for EVERY item based on:
-  * The specific food item identified
-  * The quantity provided
-  * Standard nutritional databases (USDA, Indian food composition tables)
-  * Cooking method and preparation state (cooked vs raw)
-  * Account for added oils, butter, or cooking fats in your calculations
-- Calculate values based on the quantity provided (e.g., if quantity is "3 pieces (150 gms)", calculate nutrition for 150g of that item)
-- Do NOT return 0 for nutrition values - every food item has nutritional content
-- Round values to 1 decimal place for precision
-- The number of items in the output MUST match the number of items in the input
+- You MUST calculate and provide ACTUAL nutrition values (not zeros) for EVERY item using the gram reference and calculation steps above.
+- Round calories to nearest integer, protein/carbs/fat to 1 decimal place.
+- Do NOT return 0 for nutrition values — every food item has nutritional content.
+- The number of items in the output MUST match the number of items in the input.
 
 Return only valid JSON, no additional text.`;
 
