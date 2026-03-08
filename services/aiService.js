@@ -485,62 +485,72 @@ Return only valid JSON, no additional text.`;
 
     if (imageUrl) {
       // IMAGE CASE (with or without hint)
-      const inputDataSection = hint
-        ? `1. *Image:* Photo of a meal (served state).\n2. *User Hint (Optional):* Text provided by the user describing the meal: "${hint}"`
-        : `1. *Image:* Photo of a meal (served state).`;
+      console.log(`🤖 [GEMINI-V2-STEP1] Mode: IMAGE${hint ? '+HINT' : ''} | hint: ${hint || '(none)'}`);
+      const hintSection = hint
+        ? `2. User Hint (optional): "${hint}"`
+        : '';
 
-      prompt = `### ROLE
+      prompt = `ROLE
 Food identification and portion estimation specialist. Identify food items in a photo and estimate quantities. Do NOT calculate calories or macros.
 
----
+INPUTS
+1. Image: Meal photo in served state.
+${hintSection}
 
-### INPUT DATA
-${inputDataSection}
+USER HINT PRIORITY
+When a User Hint is provided, always prioritize it over visual evidence — even if the image appears to contradict it. The user knows what they ate.
+Examples:
+* User says "3 eggs" but image shows 2 visible → output 3 eggs.
+* User says "oat milk latte" but image just shows a cup of coffee → output oat milk latte.
+* User says "chicken biryani" but it visually looks like pulao → output chicken biryani.
 
----
+DIETARY PREFERENCE
+Use dietary preference only as a tiebreaker when visual evidence is ambiguous and no User Hint is provided (e.g., chicken vs paneer in a curry). Never override clear visual evidence or User Hint.
 
-### ITEM IDENTIFICATION
+ITEM IDENTIFICATION
+Naming: Be specific when visually distinguishable (e.g., "jeera rice" not "rice", "sourdough bread" not "bread", "soba noodles" not "noodles"). Use general name when variant is unclear.
 
-**Naming:** Be specific when visually distinguishable (e.g., "jeera rice" not "rice", "sourdough bread" not "bread", "soba noodles" not "noodles"). Use general name when variant is unclear.
-
-**Composite dish breakdown** — apply ONLY when components are cooked/mixed together or served in the same vessel/poured together on plate (e.g., biryani, pasta with sauce, curry with protein, burrito, poke bowl, noodle bowls):
-- Format: Component (parent dish name) — e.g., Chicken (chicken biryani), Rice (chicken biryani)
-- Sauce/gravy/curry is ONE component (includes all sub-ingredients within it).
-- Never list parent dish alongside its components.
-- Absorb garnishes and toppings into nearest component.
+Composite dish breakdown — apply ONLY when components are cooked/mixed together or served in the same vessel/poured together on plate (e.g., biryani, pasta with sauce, curry with protein, burrito, poke bowl, noodle bowls):
+* Format: Component (parent dish name) — e.g., Chicken (chicken biryani), Rice (chicken biryani)
+* Decompose into: Protein + Base carb (rice, noodles, bread) + Sauce/curry/gravy.
+* Sauce/gravy/curry is ONE component (includes oil, base, spices within it).
+* Curry-based dishes: split into Protein (dish name) + Gravy (dish name). E.g., Chicken (chicken curry), Gravy (chicken curry).
+* Never list parent dish alongside its components. Do NOT output: "Chicken biryani", "Chicken (chicken biryani)", and "Rice (chicken biryani)" together.
+* Absorb garnishes and toppings into nearest component.
 
 Do not break down items served in separate vessels or clearly occupying distinct areas of the plate — list them independently without parentheses.
 
-**Packaged/branded items:** Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
+Packaged/branded items: Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
 
 If no food is visible in the image (e.g., blurry, dark, empty plate, non-food photo), return { "mealName": "No food detected", "items": [] }.
 
----
+QUANTITY ESTIMATION
+Size references:
+* Standard dinner plate: ~26 cm. Side/quarter plate: ~18 cm.
+* Small bowl: ~150 ml. Medium bowl: ~250 ml. Large bowl: ~400 ml. Glass: ~250 ml.
 
-### QUANTITY ESTIMATION
+Units by food type:
+* Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count → 2 rotis, 3 slices
+* Rice/grains/pasta: cups → 1 cup, 0.75 cup
+* Soups/dal/curry/gravy/sauces: bowl size or tbsp → 1 small bowl, 3 tbsp
+* Cooked vegetables: bowl size → 0.5 small bowl
+* Protein (chicken, fish, paneer, tofu, meat): count + form → 3 boneless pieces, 2 bone-in pieces, 8 paneer cubes, 1 fillet, 2 whole eggs
+* Beverages: glass or cup → 1 glass
+* Fruits: count or cups → 1 banana, 0.5 cup grapes
 
-**Size references:**
-- Standard dinner plate: ~26 cm. Side/quarter plate: ~18 cm.
-- Small bowl: ~150 ml. Medium bowl: ~250 ml. Large bowl: ~400 ml. Glass: ~250 ml.
+Principles:
+* Always count explicitly when items are individually distinguishable.
+* For scoopable/pourable foods, estimate area coverage on plate and convert to cups or bowl size.
+* When uncertain between two close quantities, choose the midpoint.
 
-**Units by food type:**
-- Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count → 2 rotis, 3 slices
-- Rice/grains/pasta: cups → 1 cup, 0.75 cup
-- Soups/dal/curry/gravy/sauces: bowl size or tbsp → 1 small bowl, 3 tbsp
-- Cooked vegetables: bowl size → 0.5 small bowl
-- Protein (chicken, fish, paneer, tofu, meat): count + form → 3 boneless pieces, 2 bone-in pieces, 8 paneer cubes, 1 fillet, 2 whole eggs
-- Beverages: glass or cup → 1 glass
-- Fruits: count or cups → 1 banana, 0.5 cup grapes
+Gram estimation:
+* For each item, also estimate total visible weight in grams based on portion size in the image.
+* For volume-based items: 1 cup = 180g, small bowl = 150g, medium bowl = 250g, large bowl = 400g, 1 glass = 250ml, 1 tbsp = 15g.
+* For bone-in items, estimate total weight including bone.
+* For composite dish components, estimate grams of that component only — not the full dish. Especially for gravy/sauce, exclude solid pieces already listed separately.
 
-**Principles:**
-- Always count explicitly when items are individually distinguishable.
-- For scoopable/pourable foods, estimate area coverage on plate and convert to cups or bowl size.
-- When uncertain between two close quantities, choose the midpoint.
-
----
-
-### OUTPUT FORMAT
-Return ONLY a raw JSON object with this exact structure:
+OUTPUT
+Return ONLY raw JSON. No markdown, no explanation.
 
 {
   "mealName": "Overall meal name (e.g., 'Dal & Rice', 'Chicken Biryani')",
@@ -551,83 +561,107 @@ Return ONLY a raw JSON object with this exact structure:
         "value": 1,
         "unit": "cups/pieces/small bowl/boneless pieces/etc"
       },
-      "confidence": 0.0-1.0
-    }
-  ]
-}
-
-### EXAMPLE
-
-{
-  "mealName": "Dal Rice with Roti & Aloo Gobi",
-  "items": [
-    { "name": "Steamed rice", "quantity": { "value": 1, "unit": "cup" }, "confidence": 0.9 },
-    { "name": "Dal", "quantity": { "value": 1, "unit": "small bowl" }, "confidence": 0.85 },
-    { "name": "Roti", "quantity": { "value": 2, "unit": "rotis" }, "confidence": 0.9 },
-    { "name": "Aloo gobi", "quantity": { "value": 0.5, "unit": "small bowl" }, "confidence": 0.8 }
-  ]
-}
-
-**IMPORTANT:** Do NOT include any nutrition/calorie fields. Only identify items and estimate quantities.
-
-Return only valid JSON, no additional text.`;
-      parts.push({ text: prompt });
-      parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
-
-    } else if (hint && !imageUrl) {
-      // TEXT ONLY CASE
-      prompt = `### ROLE
-Food identification and portion estimation specialist. Identify food items from a text description and estimate quantities. Do NOT calculate calories or macros.
-
-### INPUT DATA
-User text string: "${hint}"
-
-### ITEM IDENTIFICATION
-
-**Naming:** Be specific when the user specifies (e.g., "jeera rice" not "rice", "sourdough bread" not "bread"). Use the user's exact terms when clear.
-
-**Brand vs. Generic Logic:**
-- If the user names a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), use the brand and product name. Use the brand's standard serving size for scoops/portions.
-- If no brand is mentioned (e.g., "one apple," "boiled egg"), use standard medium size.
-
-**Packaged/branded items:** Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
-
-**Composite dish breakdown** — apply ONLY when the user describes a single dish with mixed components (e.g., "chicken biryani", "pasta with sauce"):
-- Format: Component (parent dish name) — e.g., Chicken (chicken biryani), Rice (chicken biryani)
-- Sauce/gravy/curry is ONE component (includes all sub-ingredients within it).
-- Never list parent dish alongside its components.
-
-### QUANTITY ESTIMATION
-
-**Default Logic:** If quantity is unspecified (e.g., "an apple"), assume 1 standard serving (e.g., 1 medium apple).
-
-**Units by food type:**
-- Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count → 2 rotis, 3 slices
-- Rice/grains/pasta: cups → 1 cup, 0.75 cup
-- Soups/dal/curry/gravy/sauces: bowl size or tbsp → 1 small bowl, 3 tbsp
-- Cooked vegetables: bowl size → 0.5 small bowl
-- Protein (chicken, fish, paneer, tofu, meat): count + form → 3 boneless pieces, 8 paneer cubes, 1 fillet
-- Beverages: glass or cup → 1 glass
-- Fruits: count or cups → 1 banana, 0.5 cup grapes
-
-### OUTPUT FORMAT
-Return ONLY a raw JSON object with this exact structure:
-
-{
-  "mealName": "Overall meal name (e.g., 'The Whole Truth Protein Shake', 'Banana and Eggs')",
-  "items": [
-    {
-      "name": "Item Name (e.g., The Whole Truth Protein - Chocolate)",
-      "quantity": {
-        "value": 1,
-        "unit": "Scoop/piece/cup/serving/etc"
+      "quantityAlternate": {
+        "value": 0,
+        "unit": "grams"
       },
       "confidence": 0.0-1.0
     }
   ]
 }
 
-**IMPORTANT:** Do NOT include any nutrition/calorie fields. Only identify items and estimate quantities.
+EXAMPLE
+
+{
+  "mealName": "Dal Rice with Roti & Aloo Gobi",
+  "items": [
+    { "name": "Steamed rice", "quantity": { "value": 1, "unit": "cup" }, "quantityAlternate": { "value": 180, "unit": "grams" }, "confidence": 0.9 },
+    { "name": "Dal", "quantity": { "value": 1, "unit": "small bowl" }, "quantityAlternate": { "value": 150, "unit": "grams" }, "confidence": 0.85 },
+    { "name": "Roti", "quantity": { "value": 2, "unit": "rotis" }, "quantityAlternate": { "value": 70, "unit": "grams" }, "confidence": 0.9 },
+    { "name": "Aloo gobi", "quantity": { "value": 0.5, "unit": "small bowl" }, "quantityAlternate": { "value": 75, "unit": "grams" }, "confidence": 0.8 }
+  ]
+}
+
+**IMPORTANT:** Do NOT include any nutrition/calorie fields. Only identify items and estimate quantities (both in display unit and grams).
+
+Return only valid JSON, no additional text.`;
+      parts.push({ text: prompt });
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
+
+    } else if (hint && !imageUrl) {
+      // TEXT ONLY CASE — single-shot prompt that returns full nutrition
+      console.log(`🤖 [GEMINI-V2-STEP1] Mode: TEXT-ONLY (single-shot) | hint: "${hint}"`);
+      prompt = `ROLE
+Nutrition calculator. Parse natural language food logs into structured nutritional data with macros.
+
+INPUT
+User text string: "${hint}"
+
+PARSING
+* Extract food item and quantity/unit from the text.
+* If quantity is unspecified (e.g., "an apple"), assume 1 standard serving (e.g., 1 medium apple).
+
+BRAND VS GENERIC
+* Explicit brand (e.g., "The Whole Truth", "MyProtein", "McDonald's"): use that brand's specific nutritional values and standard serving size. Brand-specific scoops vary (e.g., 30g vs 45g) — use the correct one.
+* Generic (e.g., "one apple", "boiled egg"): use standard USDA-equivalent averages for a medium size.
+
+COMPOSITE DISH BREAKDOWN
+Apply when the user mentions a commonly named dish where components are cooked/mixed together (e.g., biryani, curry with protein, pasta with sauce, burrito, noodle bowls):
+* Format: Component (parent dish name) — e.g., Chicken (chicken biryani), Rice (chicken biryani)
+* Decompose into: Protein + Base carb (rice, noodles, bread) + Sauce/curry/gravy.
+* Sauce/gravy/curry is ONE component (includes oil, base, spices within it).
+* Curry-based dishes: split into Protein (dish name) + Gravy (dish name). E.g., Chicken (chicken curry), Gravy (chicken curry).
+* Never list parent dish alongside its components. Do NOT output: "Chicken biryani", "Chicken (chicken biryani)", and "Rice (chicken biryani)" together.
+* Use standard serving sizes for each component when the user doesn't specify quantity.
+
+Do not break down items the user lists separately (e.g., "rice and dal") — list them independently without parentheses.
+
+MACRO CALCULATION
+* Calculate grams, calories, protein, carbs, and fat for each item based on the extracted quantity.
+* Use cooked/served state values.
+* Round calories to nearest integer, protein/carbs/fat to 1 decimal.
+
+OUTPUT
+Return ONLY raw JSON. No markdown, no explanation.
+
+{
+  "mealName": "Overall meal name",
+  "items": [
+    {
+      "name": "Item name",
+      "quantity": {
+        "value": 1,
+        "unit": "Scoop/piece/cup/serving/etc"
+      },
+      "quantityAlternate": {
+        "value": 0,
+        "unit": "grams"
+      },
+      "nutrition": {
+        "calories": 0,
+        "protein": 0.0,
+        "carbs": 0.0,
+        "fat": 0.0
+      },
+      "type": "brand or generic",
+      "confidence": 0.0-1.0
+    }
+  ]
+}
+
+EXAMPLE
+
+Input: "2 rotis, 1 bowl dal, chicken curry"
+
+{
+  "mealName": "Roti, Dal & Chicken Curry",
+  "items": [
+    { "name": "Roti", "quantity": { "value": 2, "unit": "rotis" }, "quantityAlternate": { "value": 70, "unit": "grams" }, "nutrition": { "calories": 220, "protein": 6.4, "carbs": 36.0, "fat": 5.6 }, "type": "generic", "confidence": 0.9 },
+    { "name": "Dal", "quantity": { "value": 1, "unit": "small bowl" }, "quantityAlternate": { "value": 150, "unit": "grams" }, "nutrition": { "calories": 135, "protein": 7.5, "carbs": 18.0, "fat": 3.8 }, "type": "generic", "confidence": 0.9 },
+    { "name": "Chicken (chicken curry)", "quantity": { "value": 3, "unit": "boneless pieces" }, "quantityAlternate": { "value": 90, "unit": "grams" }, "nutrition": { "calories": 165, "protein": 23.4, "carbs": 0.0, "fat": 7.2 }, "type": "generic", "confidence": 0.85 },
+    { "name": "Gravy (chicken curry)", "quantity": { "value": 1, "unit": "small bowl" }, "quantityAlternate": { "value": 120, "unit": "grams" }, "nutrition": { "calories": 156, "protein": 2.4, "carbs": 6.0, "fat": 13.2 }, "type": "generic", "confidence": 0.85 }
+  ]
+}
 
 Return only valid JSON, no additional text.`;
       parts.push({ text: prompt });
@@ -641,12 +675,15 @@ Return only valid JSON, no additional text.`;
 
       const responseText = result.response.text();
       console.log(`🤖 [GEMINI-V2-STEP1] Response received, length: ${responseText?.length || 0}`);
+      console.log(`🤖 [GEMINI-V2-STEP1] Raw response preview: ${responseText?.substring(0, 500)}`);
 
       if (!responseText || responseText.trim() === '') {
+        console.error('❌ [GEMINI-V2-STEP1] Empty response received');
         throw new Error('Empty response from Gemini API (quantity step)');
       }
 
       const usageMetadata = result.response.usageMetadata;
+      console.log(`🤖 [GEMINI-V2-STEP1] Tokens — input: ${usageMetadata?.promptTokenCount || 'N/A'}, output: ${usageMetadata?.candidatesTokenCount || 'N/A'}`);
       return {
         response: responseText,
         prompt,
@@ -657,6 +694,7 @@ Return only valid JSON, no additional text.`;
       };
     } catch (error) {
       console.error('❌ [GEMINI-V2-STEP1] API Error:', error.message);
+      console.error('❌ [GEMINI-V2-STEP1] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       throw error;
     }
   }
@@ -673,58 +711,37 @@ Return only valid JSON, no additional text.`;
       generationConfig: { temperature: 0.1 }
     });
 
-    const itemsList = quantityResult.items.map((item, i) =>
-      `${i + 1}. ${item.name} — ${item.quantity.value} ${item.quantity.unit}`
-    ).join('\n');
+    const itemsList = quantityResult.items.map((item, i) => {
+      const grams = item.quantityAlternate?.value || 0;
+      return `${i + 1}. ${item.name} — ${item.quantity.value} ${item.quantity.unit} (${grams}g)`;
+    }).join('\n');
 
-    const prompt = `### ROLE
-Nutrition calculator. Given identified food items with quantities, calculate macros (calories, protein, carbs, fat) per item.
+    console.log(`🤖 [GEMINI-V2-STEP2] Items for calorie calc (${quantityResult.items.length}):\n${itemsList}`);
 
----
+    const prompt = `ROLE
+Nutrition calculator. Given identified food items with quantities and gram estimates, calculate macros (calories, protein, carbs, fat) per item and for the total meal.
 
-### INPUT DATA
+INPUT
 Meal Name: "${quantityResult.mealName}"
 
-Items (with quantities):
+Items (with quantities and grams):
 ${itemsList}
 
----
+CALCULATION STEPS
 
-### GRAM REFERENCE
+1. Classify each item: Items with parentheses in the name (e.g., "Chicken (butter chicken)") are composite dish components. Items without parentheses are standalone.
 
-**Protein by form (cooked weight):**
-- 1 boneless piece (chicken/mutton) = 30g
-- 1 bone-in piece (chicken/mutton) = 50g (30g edible)
-- 1 drumstick = 75g (50g edible)
-- 1 fillet (fish) = 120g
-- 1 paneer cube = 12g
-- 1 prawn (medium) = 10g
+2. Look up per-100g macros for each item in its cooked/served state. Use the item name and form descriptor to select the correct nutritional profile:
+   * Bone-in items: use per-100g values that account for bone weight (lower protein/calorie density than boneless).
+   * Gravy/sauce components: use per-100g values for that specific gravy/sauce including its typical cooking oil, spices, and base ingredients.
+   * All other items: use standard cooked/served per-100g values.
 
-**Volume to grams:**
-- 1 cup = 180g, 1 tbsp = 15g, 1 glass = 250ml
-- Small bowl = 150g, Medium bowl = 250g, Large bowl = 400g
+3. Calculate per item: macros = (grams / 100) x per-100g macros. Round calories to nearest integer, protein/carbs/fat to 1 decimal.
 
----
+4. Sum all items for meal total.
 
-### CALCULATION STEPS
-
-1. **Classify each item:** Items with parentheses in the name (e.g., "Chicken (butter chicken)") are composite dish components. Items without parentheses are standalone.
-
-2. **For composite dish components:**
-   - **Protein component** (e.g., "Chicken (butter chicken)"): Use per-100g macros for that protein in its cooked form only — no sauce, no curry. Convert quantity to grams using protein form reference above.
-   - **Gravy/sauce component** (e.g., "Gravy (butter chicken)"): The bowl size is the total serving vessel including the protein. Subtract the protein weight from the bowl size to get gravy-only weight. Apply per-100g macros for that specific gravy/sauce (including its typical cooking oil, spices, and base ingredients) to the remaining weight.
-   - **Base carb component** (e.g., "Rice (chicken biryani)"): Use per-100g macros for that carb in its cooked state. Convert quantity to grams directly — no subtraction needed.
-
-3. **For standalone items:** Use per-100g macros for the item in its cooked/served state. Convert quantity to grams — use the reference above for protein and volume units; for countable items (roti, idli, bread, etc.), use your knowledge of standard weights.
-
-4. **Calculate per item:** macros = (grams / 100) x macros per 100g. Round calories to nearest integer, protein/carbs/fat to 1 decimal.
-
-5. **Brand Logic:** If the item name contains a brand (e.g., "The Whole Truth," "MyProtein," "McDonald's"), use that specific brand's nutritional values. Brand-specific scoops vary — use the brand's standard serving size.
-
----
-
-### OUTPUT FORMAT
-Return ONLY a raw JSON object with this exact structure:
+OUTPUT
+Return ONLY raw JSON. No markdown, no explanation.
 
 {
   "mealName": "${quantityResult.mealName}",
@@ -735,23 +752,34 @@ Return ONLY a raw JSON object with this exact structure:
         "value": 1,
         "unit": "unit as provided in input"
       },
+      "quantityAlternate": {
+        "value": 0,
+        "unit": "grams"
+      },
       "nutrition": {
-        "calories": 250,
-        "protein": 25.0,
-        "carbs": 15.0,
-        "fat": 10.5
+        "calories": 0,
+        "protein": 0.0,
+        "carbs": 0.0,
+        "fat": 0.0
       },
       "confidence": 0.0-1.0
     }
-  ]
+  ],
+  "total": {
+    "calories": 0,
+    "protein": 0.0,
+    "carbs": 0.0,
+    "fat": 0.0
+  }
 }
 
 **CRITICAL REQUIREMENTS:**
-- You MUST keep item names and quantities EXACTLY as provided in the input. Do NOT rename or re-estimate.
-- You MUST calculate and provide ACTUAL nutrition values (not zeros) for EVERY item using the gram reference and calculation steps above.
+- You MUST keep item names, quantities, and grams EXACTLY as provided in the input. Do NOT rename or re-estimate.
+- You MUST calculate and provide ACTUAL nutrition values (not zeros) for EVERY item using the grams and per-100g macros.
 - Round calories to nearest integer, protein/carbs/fat to 1 decimal place.
 - Do NOT return 0 for nutrition values — every food item has nutritional content.
 - The number of items in the output MUST match the number of items in the input.
+- Include the total meal macros in the "total" field.
 
 Return only valid JSON, no additional text.`;
 
@@ -763,12 +791,15 @@ Return only valid JSON, no additional text.`;
 
       const responseText = result.response.text();
       console.log(`🤖 [GEMINI-V2-STEP2] Response received, length: ${responseText?.length || 0}`);
+      console.log(`🤖 [GEMINI-V2-STEP2] Raw response preview: ${responseText?.substring(0, 500)}`);
 
       if (!responseText || responseText.trim() === '') {
+        console.error('❌ [GEMINI-V2-STEP2] Empty response received');
         throw new Error('Empty response from Gemini API (calorie step)');
       }
 
       const usageMetadata = result.response.usageMetadata;
+      console.log(`🤖 [GEMINI-V2-STEP2] Tokens — input: ${usageMetadata?.promptTokenCount || 'N/A'}, output: ${usageMetadata?.candidatesTokenCount || 'N/A'}`);
       return {
         response: responseText,
         prompt,
@@ -779,6 +810,7 @@ Return only valid JSON, no additional text.`;
       };
     } catch (error) {
       console.error('❌ [GEMINI-V2-STEP2] API Error:', error.message);
+      console.error('❌ [GEMINI-V2-STEP2] Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       throw error;
     }
   }
@@ -790,45 +822,186 @@ Return only valid JSON, no additional text.`;
   static async analyzeFoodCaloriesV2(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
       const llmModel = 'gemini-2.5-flash';
+      const isTextOnly = !imageUrl && hint;
 
-      // ── Step 1: Identify items + quantities ──
-      console.log('🤖 [V2] Starting Step 1: Quantity analysis');
+      console.log(`🤖 [V2] ─── Starting V2 pipeline ───`);
+      console.log(`🤖 [V2] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}, isTextOnly=${isTextOnly}`);
+
+      // ── Step 1: Identify items + quantities (text-only returns full nutrition) ──
+      console.log(`🤖 [V2] Starting Step 1: ${isTextOnly ? 'Text-only (single-shot)' : 'Quantity'} analysis`);
       const quantityRaw = await this.analyzeQuantityWithGemini(imageUrl, hint);
       const quantityParsed = this.parseAIResult(quantityRaw.response);
-      console.log(`🤖 [V2] Step 1 complete — ${quantityParsed.items.length} items identified`);
+      console.log(`🤖 [V2] Step 1 complete — ${quantityParsed.items.length} items identified, mealName="${quantityParsed.mealName}"`);
 
-      // ── Step 2: Calculate calories from quantities ──
-      console.log('🤖 [V2] Starting Step 2: Calorie calculation');
-      const caloriesRaw = await this.analyzeCaloriesFromQuantityWithGemini(quantityParsed);
-      const caloriesResult = caloriesRaw.response; // raw JSON string — same format as V1 output
-      console.log('🤖 [V2] Step 2 complete');
+      // Log each item with quantityAlternate for debugging
+      quantityParsed.items.forEach((item, i) => {
+        const altG = item.quantityAlternate?.value || 'N/A';
+        const hasNutrition = item.nutrition ? `cal=${item.nutrition.calories}` : 'no nutrition';
+        console.log(`🤖 [V2]   item[${i}]: "${item.name}" | qty=${item.quantity.value} ${item.quantity.unit} | grams=${altG} | ${hasNutrition}`);
+      });
 
-      // Aggregate token usage from both steps
-      const tokens = {
-        input: (quantityRaw.tokens.input || 0) + (caloriesRaw.tokens.input || 0),
-        output: (quantityRaw.tokens.output || 0) + (caloriesRaw.tokens.output || 0)
-      };
+      let caloriesResult;
+      let tokens;
+      let caloriesRaw = null;
 
-      // ── Save meal (same as V1) ──
+      if (isTextOnly) {
+        // Text-only prompt already returns full nutrition — skip Step 2
+        console.log('🤖 [V2] Text-only: skipping Step 2 (nutrition included in Step 1)');
+        caloriesResult = quantityRaw.response;
+        tokens = quantityRaw.tokens;
+      } else {
+        // ── Step 2: Calculate calories from quantities (image flow) ──
+        console.log('🤖 [V2] Starting Step 2: Calorie calculation');
+        caloriesRaw = await this.analyzeCaloriesFromQuantityWithGemini(quantityParsed);
+        caloriesResult = caloriesRaw.response;
+        console.log('🤖 [V2] Step 2 complete');
+
+        tokens = {
+          input: (quantityRaw.tokens.input || 0) + (caloriesRaw.tokens.input || 0),
+          output: (quantityRaw.tokens.output || 0) + (caloriesRaw.tokens.output || 0)
+        };
+      }
+
+      console.log(`🤖 [V2] Total tokens — input: ${tokens.input || 'N/A'}, output: ${tokens.output || 'N/A'}`);
+
+      // ── Save meal ──
       let savedMeal = null;
       if (userId) {
         const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
+        console.log(`🤖 [V2] Saving meal for userId=${userId}`);
         savedMeal = await this.saveMealData(userId, imageReference, caloriesResult, provider, llmModel, additionalData, tokens);
+        console.log(`🤖 [V2] Meal saved: mealId=${savedMeal?._id}`);
       }
 
+      console.log(`🤖 [V2] ─── V2 pipeline complete ───`);
       return {
         calories: caloriesResult,
         provider,
         mealId: savedMeal ? savedMeal._id : null,
-        // V2 extras — expose intermediate quantity result
         quantityResult: quantityParsed,
         steps: {
           step1_tokens: quantityRaw.tokens,
-          step2_tokens: caloriesRaw.tokens
+          step2_tokens: caloriesRaw ? caloriesRaw.tokens : null
         }
       };
     } catch (error) {
+      console.error(`❌ [V2] Pipeline failed: ${error.message}`);
       throw new Error(`Failed to analyze food (V2): ${error.message}`);
+    }
+  }
+
+  /**
+   * V3 entry point: Step 1 (quantity) + Step 2 (DB lookup, all-or-nothing).
+   * Tries DB for all items first. If any item misses, falls back to a single
+   * LLM call for ALL items (no per-item LLM calls).
+   */
+  static async analyzeFoodCaloriesV3(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
+    try {
+      const llmModel = 'gemini-2.5-flash';
+      const isTextOnly = !imageUrl && hint;
+
+      console.log(`🤖 [V3] ─── Starting V3 pipeline ───`);
+      console.log(`🤖 [V3] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}`);
+
+      // Step 1: Identify items + quantities
+      console.log(`🤖 [V3] Starting Step 1: ${isTextOnly ? 'Text-only (single-shot)' : 'Quantity'} analysis`);
+      const quantityRaw = await this.analyzeQuantityWithGemini(imageUrl, hint);
+      const quantityParsed = this.parseAIResult(quantityRaw.response);
+      console.log(`🤖 [V3] Step 1 complete — ${quantityParsed.items.length} items identified, mealName="${quantityParsed.mealName}"`);
+
+      quantityParsed.items.forEach((item, i) => {
+        const altG = item.quantityAlternate?.value || 'N/A';
+        const hasNutrition = item.nutrition ? `cal=${item.nutrition.calories}` : 'no nutrition';
+        console.log(`🤖 [V3]   item[${i}]: "${item.name}" | qty=${item.quantity.value} ${item.quantity.unit} | grams=${altG} | ${hasNutrition}`);
+      });
+
+      let nutritionResult;
+      let totalTokens = { ...quantityRaw.tokens };
+      let nutritionSource = 'db';
+
+      if (isTextOnly && quantityParsed.items.length > 0 && quantityParsed.items[0].nutrition) {
+        // Text-only prompt already returned full nutrition — use directly
+        console.log('🤖 [V3] Text-only: using nutrition from Step 1 (single-shot)');
+        nutritionSource = 'llm';
+        nutritionResult = {
+          mealName: quantityParsed.mealName,
+          items: quantityParsed.items.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            quantityAlternate: item.quantityAlternate,
+            nutrition: item.nutrition,
+            grams: item.quantityAlternate?.value || null,
+            nutritionSource: 'llm_fallback',
+            parentDish: null, componentType: null, proteinForm: null
+          }))
+        };
+      } else {
+        // Step 2a: Try DB lookup for ALL items (no LLM)
+        console.log('🤖 [V3] Starting Step 2: Nutrition DB lookup (all-or-nothing)');
+        const NutritionLookupService = require('./nutritionLookupService');
+        const dbResult = await NutritionLookupService.calculateNutrition(quantityParsed);
+
+        if (dbResult.allFromDb) {
+          console.log(`🤖 [V3] Step 2 complete — ALL ${dbResult.items.length} items resolved from DB`);
+          nutritionResult = dbResult;
+
+          dbResult.items.forEach((item, i) => {
+            console.log(`🤖 [V3]   result[${i}]: "${item.name}" | source=db | grams=${item.grams || 'N/A'} | cal=${item.nutrition?.calories || 0}`);
+          });
+        } else {
+          // Step 2b: DB missed some items — single LLM call for ALL items
+          console.log(`🤖 [V3] DB missed ${dbResult.missedItems.length} items: ${JSON.stringify(dbResult.missedItems)}`);
+          console.log('🤖 [V3] Falling back to single LLM call for ALL items');
+          nutritionSource = 'llm';
+
+          const llmRaw = await this.analyzeCaloriesFromQuantityWithGemini(quantityParsed);
+          const llmParsed = this.parseAIResult(llmRaw.response);
+          console.log(`🤖 [V3] LLM fallback complete — ${llmParsed.items.length} items`);
+
+          totalTokens = {
+            input: (quantityRaw.tokens.input || 0) + (llmRaw.tokens.input || 0),
+            output: (quantityRaw.tokens.output || 0) + (llmRaw.tokens.output || 0)
+          };
+
+          nutritionResult = {
+            mealName: llmParsed.mealName || quantityParsed.mealName,
+            items: llmParsed.items.map(item => ({
+              name: item.name,
+              quantity: item.quantity,
+              quantityAlternate: item.quantityAlternate,
+              nutrition: item.nutrition,
+              grams: item.quantityAlternate?.value || null,
+              nutritionSource: 'llm_fallback',
+              parentDish: null, componentType: null, proteinForm: null
+            }))
+          };
+
+          nutritionResult.items.forEach((item, i) => {
+            console.log(`🤖 [V3]   result[${i}]: "${item.name}" | source=llm | grams=${item.grams || 'N/A'} | cal=${item.nutrition?.calories || 0}`);
+          });
+        }
+      }
+
+      let savedMeal = null;
+      if (userId) {
+        const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
+        console.log(`🤖 [V3] Saving meal for userId=${userId} | nutritionSource=${nutritionSource}`);
+        savedMeal = await this.saveMealDataForV3(userId, imageReference, nutritionResult, additionalData, totalTokens);
+        console.log(`🤖 [V3] Meal saved: mealId=${savedMeal?._id}`);
+      }
+
+      console.log(`🤖 [V3] ─── V3 pipeline complete (source=${nutritionSource}) ───`);
+      return {
+        calories: nutritionResult,
+        provider,
+        mealId: savedMeal ? savedMeal._id : null,
+        quantityResult: quantityParsed,
+        nutritionSource,
+        steps: { step1_tokens: quantityRaw.tokens }
+      };
+    } catch (error) {
+      console.error(`❌ [V3] Pipeline failed: ${error.message}`);
+      throw new Error(`Failed to analyze food (V3): ${error.message}`);
     }
   }
 
@@ -1107,7 +1280,7 @@ Return only valid JSON, no additional text.`;
       
       // Convert items to meal schema format
       const mealItems = parsedResult.items.map((item, index) => ({
-        id: `item_${Date.now()}_${index}`, // Generate unique ID
+        id: `item_${Date.now()}_${index}`,
         name: {
           llm: item.name,
           final: null
@@ -1126,13 +1299,20 @@ Return only valid JSON, no additional text.`;
             unit: null
           }
         },
+        quantityAlternate: {
+          llm: {
+            value: item.quantityAlternate?.value || null,
+            unit: item.quantityAlternate?.unit || 'grams'
+          },
+          final: { value: null, unit: null }
+        },
         nutrition: {
           calories: { llm: item.nutrition.calories, final: null },
           protein: { llm: item.nutrition.protein, final: null },
           carbs: { llm: item.nutrition.carbs, final: null },
           fat: { llm: item.nutrition.fat, final: null }
         },
-        confidence: item.confidence || null // Use AI confidence or default to null
+        confidence: item.confidence || null
       }));
       
       // Handle photos array - only include if imageUrl is a valid URL
@@ -1171,6 +1351,84 @@ Return only valid JSON, no additional text.`;
     } catch (error) {
       console.error('Failed to save meal data:', error);
       throw new Error(`Failed to save meal data: ${error.message}`);
+    }
+  }
+
+  static async saveMealDataForV3(userId, imageUrl, nutritionResult, additionalData = {}, tokens = { input: null, output: null }) {
+    try {
+      const totalNutrition = this.calculateTotalNutrition(nutritionResult.items);
+
+      const mealItems = nutritionResult.items.map((item, index) => {
+        const isDb = item.nutritionSource === 'db';
+        const nut = item.nutrition || {};
+        return {
+          id: `item_${Date.now()}_${index}`,
+          name: { llm: item.name, final: null },
+          quantity: {
+            llm: {
+              value: item.quantity?.value ?? 1,
+              unit: item.quantity?.unit || 'serving',
+              normalized: { value: item.quantity?.value ?? 1, unit: item.quantity?.unit || 'serving' }
+            },
+            final: null
+          },
+          quantityAlternate: {
+            llm: {
+              value: item.quantityAlternate?.value || item.grams || null,
+              unit: 'grams'
+            },
+            final: { value: null, unit: null }
+          },
+          nutrition: {
+            calories: { llm: nut.calories || 0, final: isDb ? nut.calories : null },
+            protein: { llm: nut.protein || 0, final: isDb ? nut.protein : null },
+            carbs: { llm: nut.carbs || 0, final: isDb ? nut.carbs : null },
+            fat: { llm: nut.fat || 0, final: isDb ? nut.fat : null }
+          },
+          confidence: null,
+          nutritionSource: item.nutritionSource || 'llm_fallback',
+          grams: item.grams ?? null,
+          parentDish: item.parentDish ?? null,
+          componentType: item.componentType ?? null,
+          proteinForm: item.proteinForm ?? null
+        };
+      });
+
+      const photos = [];
+      if (imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+        photos.push({
+          url: imageUrl,
+          width: additionalData.width || null,
+          height: additionalData.height || null
+        });
+      }
+
+      const dateUtils = require('../utils/dateUtils');
+      const mealData = {
+        userId,
+        capturedAt: additionalData.capturedAt ? new Date(additionalData.capturedAt) : dateUtils.getCurrentDateInIST(),
+        photos,
+        llmVersion: '3.0',
+        llmModel: 'gemini-2.5-flash',
+        name: nutritionResult.mealName,
+        totalNutrition: {
+          calories: { llm: totalNutrition.calories, final: totalNutrition.calories },
+          protein: { llm: totalNutrition.protein, final: totalNutrition.protein },
+          carbs: { llm: totalNutrition.carbs, final: totalNutrition.carbs },
+          fat: { llm: totalNutrition.fat, final: totalNutrition.fat }
+        },
+        items: mealItems,
+        notes: additionalData.notes || `AI Analysis (V3): ${nutritionResult.mealName}`,
+        userApproved: false,
+        inputTokens: tokens.input,
+        outputTokens: tokens.output
+      };
+
+      const meal = new Meal(mealData);
+      return await meal.save();
+    } catch (error) {
+      console.error('Failed to save meal data (V3):', error);
+      throw new Error(`Failed to save meal data (V3): ${error.message}`);
     }
   }
 
