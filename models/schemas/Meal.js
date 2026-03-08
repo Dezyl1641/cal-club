@@ -36,6 +36,17 @@ const itemQuantitySchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const itemQuantityAlternateSchema = new mongoose.Schema({
+  llm: {
+    value: Number,
+    unit: String
+  },
+  final: {
+    value: Number,
+    unit: String
+  }
+}, { _id: false });
+
 const itemSchema = new mongoose.Schema({
   id: {
     type: String,
@@ -46,8 +57,14 @@ const itemSchema = new mongoose.Schema({
     final: String
   },
   quantity: itemQuantitySchema,
+  quantityAlternate: itemQuantityAlternateSchema,
   nutrition: nutritionSchema,
-  confidence: Number
+  confidence: Number,
+  nutritionSource: { type: String, enum: ['db', 'llm_fallback'], default: null },
+  grams: { type: Number, default: null },
+  parentDish: { type: String, default: null },
+  componentType: { type: String, default: null }, // 'protein' | 'gravy' when set
+  proteinForm: { type: String, default: null }
 }, { _id: false });
 
 const photoSchema = new mongoose.Schema({

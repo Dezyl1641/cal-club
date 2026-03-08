@@ -31,6 +31,8 @@ const mealFormatter = {
       name: item.name?.final || item.name?.llm || 'Unknown Item',
       quantity: String(item.quantity?.final?.value || item.quantity?.llm?.value || 0),
       unit: item.quantity?.final?.unit || item.quantity?.llm?.unit || 'g',
+      quantityAlternate: String(item.quantityAlternate?.final?.value || item.quantityAlternate?.llm?.value || ''),
+      quantityAlternateUnit: item.quantityAlternate?.final?.unit || item.quantityAlternate?.llm?.unit || 'grams',
       calories: parseFloat((item.nutrition?.calories?.final || item.nutrition?.calories?.llm || 0).toFixed(1)),
       protein: parseFloat((item.nutrition?.protein?.final || item.nutrition?.protein?.llm || 0).toFixed(1)),
       carbs: parseFloat((item.nutrition?.carbs?.final || item.nutrition?.carbs?.llm || 0).toFixed(1)),
