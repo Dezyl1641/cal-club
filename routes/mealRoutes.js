@@ -29,8 +29,12 @@ function mealRoutes(req, res) {
 
   // If exact match not found, try to match parameterized routes
   if (!handler) {
+    // Check for /meals/:mealId/impact pattern (meal impact analysis)
+    if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/impact$/)) {
+      handler = mealController.getMealImpact;
+    }
     // Check for /meals/:mealId/clone pattern (clone/duplicate a meal)
-    if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/clone$/)) {
+    else if (method === 'POST' && basePath.match(/^\/meals\/[^\/]+\/clone$/)) {
       handler = mealController.cloneMeal;
     }
     // Check for /meals/:mealId/items pattern (add item to meal)

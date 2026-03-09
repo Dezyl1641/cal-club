@@ -4,6 +4,7 @@ const MealEditAudit = require('../models/schemas/MealEditAudit');
 const parseBody = require('../utils/parseBody');
 const mealFormatter = require('../utils/mealFormatter');
 const AiService = require('../services/aiService');
+const MealImpactService = require('../services/mealImpactService');
 const { reportError } = require('../utils/sentryReporter');
 
 /**
@@ -1644,6 +1645,44 @@ async function cloneMeal(req, res) {
   }
 }
 
+async function getMealImpact(req, res) {
+  try {
+    const userId = req.user.userId;
+    const basePath = req.url.split('?')[0];
+    const pathParts = basePath.split('/');
+    // /meals/:mealId/impact -> ['', 'meals', mealId, 'impact']
+    const mealId = pathParts[2];
+
+    if (!mealId) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'mealId is required' }));
+      return;
+    }
+
+    const meal = await MealService.getMealById(userId, mealId);
+    if (!meal) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Meal not found' }));
+      return;
+    }
+
+    const { satiety, glucoseImpact, smallSwaps, enrichment } = await MealImpactService.analyzeMealImpact(meal);
+
+    // Fire-and-forget: save fiber/GI enrichment data to the meal document
+    MealImpactService.saveEnrichmentData(meal, enrichment).catch(err => {
+      console.error('⚠️ [MealImpact] Enrichment save error:', err.message);
+    });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ satiety, glucoseImpact, smallSwaps }));
+  } catch (error) {
+    reportError(error, { req });
+    console.error('Error generating meal impact:', error);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Failed to generate meal impact', details: error.message }));
+  }
+}
+
 module.exports = {
   createMeal,
   getMeals,
@@ -1659,5 +1698,6 @@ module.exports = {
   addItemToMeal,
   deleteItemFromMeal,
   getMealSuggestions,
-  cloneMeal
+  cloneMeal,
+  getMealImpact
 }; 
