@@ -2,7 +2,7 @@ const ActivityStoreService = require('../services/activityStoreService');
 const parseBody = require('../utils/parseBody');
 const { reportError } = require('../utils/sentryReporter');
 
-/** POST /activity-store/sync. Body: { category: string, source: string, date?: string|Date, data: array } */
+/** POST /activity-store/sync. Body: { category, source, date?, data[] } */
 function sync(req, res) {
   if (!req.user?.userId) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -35,13 +35,7 @@ function sync(req, res) {
     }
 
     try {
-      const result = await ActivityStoreService.sync(
-        req.user.userId,
-        category,
-        source,
-        date,
-        data
-      );
+      const result = await ActivityStoreService.sync(req.user.userId, category, source, date, data);
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, ...result }));
     } catch (e) {
@@ -69,13 +63,10 @@ async function fetch(req, res) {
   }
 
   const category = url.searchParams.get('category') || undefined;
-  const source = url.searchParams.get('source') || undefined;
+  const source  = url.searchParams.get('source') || undefined;
 
   try {
-    const docs = await ActivityStoreService.fetch(req.user.userId, date, {
-      category,
-      source
-    });
+    const docs = await ActivityStoreService.fetch(req.user.userId, date, { category, source });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, date, data: docs }));
   } catch (e) {
@@ -95,7 +86,7 @@ async function fetchRange(req, res) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
   const from = url.searchParams.get('from');
-  const to = url.searchParams.get('to');
+  const to   = url.searchParams.get('to');
   const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
   if (!from || !to || !dateRegex.test(from) || !dateRegex.test(to)) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -104,15 +95,10 @@ async function fetchRange(req, res) {
   }
 
   const category = url.searchParams.get('category') || undefined;
-  const source = url.searchParams.get('source') || undefined;
+  const source  = url.searchParams.get('source') || undefined;
 
   try {
-    const docs = await ActivityStoreService.fetchRange(
-      req.user.userId,
-      from,
-      to,
-      { category, source }
-    );
+    const docs = await ActivityStoreService.fetchRange(req.user.userId, from, to, { category, source });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, from, to, data: docs }));
   } catch (e) {

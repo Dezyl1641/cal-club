@@ -1,137 +1,68 @@
 const ActivityStore = require('../models/schemas/ActivityStore');
-const { TimezoneConstants } = require('../config/constants');
-const { getTodayDateString, isToday } = require('../utils/dateUtils');
-
-function buildId(userId, category, source, dateStr) {
-  const uid = typeof userId === 'object' && userId.toString ? userId.toString() : String(userId);
-  const cat = String(category).trim().toUpperCase();
-  const src = String(source).trim().toUpperCase();
-  return `${uid}_${cat}_${src}_${dateStr}`;
-}
-
-function toDateStringForLocale(dateInput, timezone = TimezoneConstants.DEFAULT_TIMEZONE) {
-  if (!dateInput) return getTodayDateString();
-  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) return dateInput;
-  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-  if (isNaN(d.getTime())) return getTodayDateString();
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-  return formatter.format(d);
-}
-
-function mergeData(existingData, incomingData) {
-  const map = new Map();
-  const key = (item) => {
-    const t = item.time != null ? String(item.time) : '';
-    if (item.activity_type != null) return `${t}|${item.activity_type}`;
-    return t;
-  };
-  (existingData || []).forEach((item) => map.set(key(item), item));
-  (incomingData || []).forEach((item) => map.set(key(item), item));
-  return Array.from(map.values());
-}
+const { isToday, resolveDate } = require('../utils/dateUtils');
+const { DATE_REGEX, buildId, mergeData, normalise } = require('../utils/activityStoreUtils');
 
 class ActivityStoreService {
-  /** Sync: today+same source=merge, today+other source=replace, past+no doc=create, past+doc=ignore. */
+  /**
+   * Sync health data for a (user_id, category, source, date) tuple.
+   *
+   * - Different sources → separate documents, never interfere with each other.
+   * - Today  + doc exists → merge (safe for repeated syncs throughout the day).
+   * - Today  + no doc     → create.
+   * - Past   + doc exists → ignore (past docs are immutable).
+   * - Past   + no doc     → create.
+   */
   static async sync(userId, category, source, dateInput, data) {
-    const cat = String(category).trim();
-    if (!cat) throw new Error('category is required.');
-    const dateStr = toDateStringForLocale(dateInput);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error('Invalid date.');
-    const id = buildId(userId, cat, source, dateStr);
-    const normalizedSource = String(source).trim().toUpperCase();
-    const now = new Date();
+    const categoryName = normalise(category);
+    if (!categoryName) throw new Error('category is required.');
 
-    const existingDoc = await ActivityStore.findById(id).lean();
-    const existingForDay = await ActivityStore.findOne({
-      userId: userId,
-      category: cat,
-      date: dateStr
-    }).lean();
+    const dateStr = resolveDate(dateInput);
+    if (!DATE_REGEX.test(dateStr)) throw new Error('Invalid date.');
 
-    const isTodayCheck = isToday(dateStr);
+    const src = normalise(source);
+    const id  = buildId(userId, categoryName, src, dateStr);
+    const date = new Date(`${dateStr}T00:00:00.000Z`);
 
-    if (isTodayCheck) {
-      if (existingDoc) {
-        if (existingDoc.source === normalizedSource) {
-          const mergedData = mergeData(existingDoc.data, data || []);
-          await ActivityStore.findByIdAndUpdate(id, {
-            data: mergedData,
-            synced_at: now
-          });
-          return { action: 'merged', _id: id };
-        }
-        await ActivityStore.deleteMany({
-          userId: userId,
-          category: cat,
-          date: dateStr
-        });
+    const existing = await ActivityStore.findById(id).lean();
+
+    if (existing) {
+      if (isToday(dateStr)) {
+        await ActivityStore.findByIdAndUpdate(id, { data: mergeData(existing.data, data) });
+        return { action: 'merged', _id: id };
       }
-      await ActivityStore.findOneAndUpdate(
-        { _id: id },
-        {
-          _id: id,
-          userId: userId,
-          category: cat,
-          source: normalizedSource,
-          date: dateStr,
-          data: data || [],
-          synced_at: now,
-          schema_version: 1
-        },
-        { upsert: true, new: true }
-      );
-      return { action: existingDoc && existingDoc.source !== normalizedSource ? 'replaced' : 'upserted', _id: id };
+      return { action: 'ignored', _id: id, reason: 'past_doc_immutable' };
     }
 
-    if (existingForDay) {
-      return { action: 'ignored', _id: id, reason: 'document_exists_for_day' };
-    }
-    await ActivityStore.create({
-      _id: id,
-      userId: userId,
-      category: cat,
-      source: normalizedSource,
-      date: dateStr,
-      data: data || [],
-      synced_at: now,
-      schema_version: 1
-    });
+    await ActivityStore.create({ _id: id, user_id: userId, category: categoryName, source: src, date, data: data || [], schema_version: 1 });
     return { action: 'created', _id: id };
   }
 
-  /** Fetch activity for one day. Optional filter: category, source. */
-  static async fetch(userId, dateInput, options = {}) {
-    const dateStr = toDateStringForLocale(dateInput);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return [];
+  /** Fetch all docs for a single day. Optionally filter by category and/or source. */
+  static async fetch(userId, dateInput, { category, source } = {}) {
+    const dateStr = resolveDate(dateInput);
+    if (!DATE_REGEX.test(dateStr)) return [];
 
-    const filter = { userId: userId, date: dateStr };
-    if (options.category) filter.category = String(options.category).trim();
-    if (options.source) filter.source = String(options.source).trim().toUpperCase();
+    const filter = { user_id: userId, date: new Date(`${dateStr}T00:00:00.000Z`) };
+    if (category) filter.category = normalise(category);
+    if (source)  filter.source   = normalise(source);
 
-    const docs = await ActivityStore.find(filter).sort({ source: 1 }).lean();
-    return docs;
+    return ActivityStore.find(filter).sort({ category: 1, source: 1 }).lean();
   }
 
-  /** Fetch activity for a date range. Optional filter: category, source. */
-  static async fetchRange(userId, startDateInput, endDateInput, options = {}) {
-    const startStr = toDateStringForLocale(startDateInput);
-    const endStr = toDateStringForLocale(endDateInput);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startStr) || !/^\d{4}-\d{2}-\d{2}$/.test(endStr) || startStr > endStr) return [];
+  /** Fetch all docs for a date range [from, to] inclusive. Optionally filter by category and/or source. */
+  static async fetchRange(userId, fromInput, toInput, { category, source } = {}) {
+    const from = resolveDate(fromInput);
+    const to   = resolveDate(toInput);
+    if (!DATE_REGEX.test(from) || !DATE_REGEX.test(to) || from > to) return [];
 
     const filter = {
       user_id: userId,
-      date: { $gte: startStr, $lte: endStr }
+      date: { $gte: new Date(`${from}T00:00:00.000Z`), $lte: new Date(`${to}T00:00:00.000Z`) }
     };
-    if (options.category) filter.category = String(options.category).trim();
-    if (options.source) filter.source = String(options.source).trim().toUpperCase();
+    if (category) filter.category = normalise(category);
+    if (source)  filter.source   = normalise(source);
 
-    const docs = await ActivityStore.find(filter).sort({ date: 1, source: 1 }).lean();
-    return docs;
+    return ActivityStore.find(filter).sort({ date: 1, category: 1, source: 1 }).lean();
   }
 }
 

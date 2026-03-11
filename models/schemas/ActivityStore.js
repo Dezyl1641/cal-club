@@ -1,40 +1,35 @@
 const mongoose = require('mongoose');
 
-/** One doc per (user, category, source, date). */
+/** One doc per (user_id, category, source, date). */
 const activityStoreSchema = new mongoose.Schema({
-  userId: {
+  _id: {
+    type: String
+  },
+  user_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
-    index: true
+    required: true
   },
   category: {
     type: String,
     required: true,
     trim: true,
-    index: true
+    uppercase: true
   },
   source: {
     type: String,
     required: true,
     trim: true,
-    uppercase: true,
-    index: true
+    uppercase: true
   },
-  /** Calendar day YYYY-MM-DD in user's locale (default IST). No UTC conversion. */
+  /** Midnight UTC of the calendar day (e.g. 2026-02-15T00:00:00.000Z). */
   date: {
-    type: String,
-    required: true,
-    trim: true,
-    index: true
+    type: Date,
+    required: true
   },
   data: {
     type: [mongoose.Schema.Types.Mixed],
     default: []
-  },
-  synced_at: {
-    type: Date,
-    default: Date.now
   },
   schema_version: {
     type: Number,
@@ -44,5 +39,11 @@ const activityStoreSchema = new mongoose.Schema({
   timestamps: true,
   _id: true
 });
+
+/** Primary lookup: all docs for a user on a given day (with optional category/source filter). */
+activityStoreSchema.index({ user_id: 1, date: 1, category: 1, source: 1 });
+
+/** Range queries across dates. */
+activityStoreSchema.index({ user_id: 1, category: 1, date: 1 });
 
 module.exports = mongoose.model('ActivityStore', activityStoreSchema, 'activity_store');

@@ -86,6 +86,18 @@ function toIST(date = null) {
   return new Date(istDate.getTime() - istOffsetMs);
 }
 
+/**
+ * Resolve any date input (Date, ISO string, or YYYY-MM-DD string) to a YYYY-MM-DD
+ * string in the given timezone. Falls back to today if input is absent or invalid.
+ */
+function resolveDate(input, timezone = DEFAULT_TZ) {
+  if (!input) return getCurrentDateString();
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return getCurrentDateString();
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
 /** Today as YYYY-MM-DD in given timezone (default from TimezoneConstants). */
 function getCurrentDateString(timezone = DEFAULT_TZ) {
   const now = new Date();
@@ -108,5 +120,6 @@ module.exports = {
   getCurrentDateTime,
   toIST,
   getTodayDateString: getCurrentDateString,
-  isToday
+  isToday,
+  resolveDate
 };
