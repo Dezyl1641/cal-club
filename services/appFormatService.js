@@ -6,6 +6,7 @@ const Question = require('../models/schemas/Question');
 const UserQuestion = require('../models/schemas/UserQuestion');
 const Membership = require('../models/schemas/Membership');
 const { checkMembership } = require('../utils/membershipCheck');
+const { isTestUser } = require('../config/testUsers');
 
 // Interfaces for type consistency
 const AppBarData = {
@@ -888,7 +889,9 @@ class AppFormatService {
       };
 
       // Build menu items
-      const menuItems = this.buildMenuItems({});
+      const menuItems = this.buildMenuItems({
+        isTestUser: isTestUser(user._id || user.id || userId)
+      });
 
       // Build footer data
       const footerData = this.buildSettingsFooterData();
@@ -955,9 +958,10 @@ class AppFormatService {
    * Build menu items array for settings screen
    * @param {Object} context - Context data
    * @param {boolean} context.isOnboardingComplete - Whether onboarding is complete
+   * @param {boolean} context.isTestUser - Whether user is a test user
    * @returns {Array} Menu items array
    */
-  static buildMenuItems({ isOnboardingComplete }) {
+  static buildMenuItems({ isOnboardingComplete, isTestUser = false }) {
     const menuItems = [];
 
     // Goal Settings
@@ -986,18 +990,20 @@ class AppFormatService {
       subtitle: null
     });
 
-    // Subscriptions
-    // menuItems.push({
-    //   id: 'subscriptions',
-    //   icon: 'subscriptions',
-    //   title: 'Subscriptions',
-    //   action: 'navigate_subscriptions',
-    //   url: null,
-    //   type: 'navigation',
-    //   color: null,
-    //   showDivider: true,
-    //   subtitle: null
-    // });
+    // Subscriptions (only for test users)
+    if (isTestUser) {
+      menuItems.push({
+        id: 'subscriptions',
+        icon: 'subscriptions',
+        title: 'Subscriptions',
+        action: 'navigate_subscriptions',
+        url: null,
+        type: 'navigation',
+        color: null,
+        showDivider: true,
+        subtitle: null
+      });
+    }
 
     // Apple Health
     menuItems.push({
