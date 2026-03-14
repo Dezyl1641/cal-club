@@ -12,6 +12,7 @@ const userLogRoutes = require('./userLogRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const recommendationRoutes = require('./recommendationRoutes');
 const { requireAccess } = require('../middleware/membership');
+const activityStoreRoutes = require('./activityStoreRoutes');
 
 function setupRoutes(req, res) {
   const url = req.url;
@@ -84,6 +85,11 @@ function setupRoutes(req, res) {
   // Recommendation routes
   if (url.startsWith('/recommendations')) {
     return requireAccess(req, res, () => recommendationRoutes(req, res));
+  }
+
+  // Activity store (sync / fetch)
+  if (url.startsWith('/activity-store')) {
+    return activityStoreRoutes(req, res);
   }
 
   // Default 404

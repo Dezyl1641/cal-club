@@ -16,6 +16,7 @@ async function connectToMongo() {
       require('../models/schemas/FoodItem');
       require('../models/schemas/UnitConversion');
       require('../models/schemas/NutritionMiss');
+      require('../models/schemas/ActivityStore');
     }
     return mongoose.connection;
   } catch (err) {
