@@ -2,7 +2,7 @@ const ActivityStoreService = require('../services/activityStoreService');
 const parseBody = require('../utils/parseBody');
 const { reportError } = require('../utils/sentryReporter');
 
-/** POST /activity-store/sync. Body: { category, source, date?, data[] } */
+/** POST /activity-store/sync. Body: { source, records: [{ date, data[] }] } */
 function sync(req, res) {
   if (!req.user?.userId) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
@@ -17,27 +17,27 @@ function sync(req, res) {
       return;
     }
 
-    const { category, source, date, data } = body;
-    if (!category || typeof category !== 'string' || !String(category).trim()) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'category is required' }));
-      return;
-    }
+    const { source, records } = body;
     if (!source) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'source is required' }));
       return;
     }
-    if (!Array.isArray(data)) {
+    if (!Array.isArray(records) || records.length === 0) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'data must be an array' }));
+      res.end(JSON.stringify({ error: 'records must be a non-empty array' }));
+      return;
+    }
+    if (records.some((r) => !r.date || !Array.isArray(r.data))) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'each record must have a date and a data array' }));
       return;
     }
 
     try {
-      const result = await ActivityStoreService.sync(req.user.userId, category, source, date, data);
+      const results = await ActivityStoreService.sync(req.user.userId, source, records);
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, ...result }));
+      res.end(JSON.stringify({ success: true, results }));
     } catch (e) {
       reportError(e, { req });
       res.writeHead(500, { 'Content-Type': 'application/json' });

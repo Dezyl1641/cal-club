@@ -1,5 +1,7 @@
 /** Utility helpers specific to the activity store. */
 
+const { CATEGORY, ACTIVITY_TYPE } = require('./activityStoreConstants');
+
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Normalise a string field: trim + uppercase (makes all keys case-insensitive). */
@@ -17,20 +19,35 @@ function buildId(userId, category, source, date) {
 }
 
 /**
- * Merge two data arrays by key.
- * - Vitals (steps, calories, distance): keyed by `time` → latest value wins per slot.
- * - Exercises: keyed by `time|activity_type` → different types at the same time coexist.
- * Incoming items always overwrite existing items at the same key.
+ * Merge two data arrays according to category rules:
+ * - SUMMARY:  incoming replaces existing entirely (latest value wins).
+ * - EXERCISE: append all items; deduplicate by `start_time|end_time`.
+ * - Default:  latest value wins per `activity_type`.
  */
-function mergeData(existing, incoming) {
-  const itemKey = (item) => {
-    const t = item.time != null ? String(item.time) : '';
-    return item.activity_type != null ? `${t}|${item.activity_type}` : t;
-  };
+function mergeData(existing, incoming, category) {
+  const cat = category != null ? String(category).toUpperCase() : '';
+
+  if (cat === CATEGORY.SUMMARY) {
+    const map = new Map();
+    (existing || []).forEach((item) => map.set(item.activity_type != null ? String(item.activity_type) : '', item));
+    (incoming || []).forEach((item) => map.set(item.activity_type != null ? String(item.activity_type) : '', item));
+    return Array.from(map.values());
+  }
+
+  if (cat === CATEGORY.EXERCISE) {
+    const exerciseKey = (item) =>
+      `${item.start_time != null ? String(item.start_time) : ''}|${item.end_time != null ? String(item.end_time) : ''}`;
+    const map = new Map();
+    (existing || []).forEach((item) => map.set(exerciseKey(item), item));
+    (incoming || []).forEach((item) => map.set(exerciseKey(item), item));
+    return Array.from(map.values());
+  }
+
+  // Default: latest value wins per activity_type
   const map = new Map();
-  (existing || []).forEach((item) => map.set(itemKey(item), item));
-  (incoming || []).forEach((item) => map.set(itemKey(item), item));
+  (existing || []).forEach((item) => map.set(item.activity_type != null ? String(item.activity_type) : '', item));
+  (incoming || []).forEach((item) => map.set(item.activity_type != null ? String(item.activity_type) : '', item));
   return Array.from(map.values());
 }
 
-module.exports = { DATE_REGEX, normalise, buildId, mergeData };
+module.exports = { DATE_REGEX, normalise, buildId, mergeData, CATEGORY, ACTIVITY_TYPE };

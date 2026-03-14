@@ -22,9 +22,9 @@ const activityStoreSchema = new mongoose.Schema({
     trim: true,
     uppercase: true
   },
-  /** Midnight UTC of the calendar day (e.g. 2026-02-15T00:00:00.000Z). */
+  /** Calendar day in YYYY-MM-DD format (e.g. "2026-02-15"). */
   date: {
-    type: Date,
+    type: String,
     required: true
   },
   data: {
