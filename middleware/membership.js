@@ -8,7 +8,7 @@
 const { checkMembership } = require('../utils/membershipCheck');
 
 const MEMBERSHIP_ENFORCEMENT_ENABLED =
-  (process.env.MEMBERSHIP_ENFORCEMENT_ENABLED || 'false').toLowerCase() === 'false';
+  (process.env.MEMBERSHIP_ENFORCEMENT_ENABLED || 'false').toLowerCase() === 'true';
 
 /**
  * Attach membership status to req.user without blocking.
