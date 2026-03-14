@@ -4,6 +4,8 @@ const Membership = require('../models/schemas/Membership');
 const Plan = require('../models/schemas/Plan');
 const parseBody = require('../utils/parseBody');
 const { reportError } = require('../utils/sentryReporter');
+const RevenueCatService = require('../services/revenuecatService');
+const { invalidateCache } = require('../utils/membershipCheck');
 
 // Note: Signature verification removed as it's disabled in Razorpay dashboard
 
@@ -304,6 +306,28 @@ async function handleRazorpayWebhook(req, res) {
         reportError(error, { req, extra: { context: 'razorpay_renewal' } });
         console.error('❌ [RAZORPAY] ERROR PROCESSING RENEWAL:', error);
         // Don't fail the webhook for membership creation errors
+      }
+    }
+
+    // ── Sync to RevenueCat: Grant promotional entitlement for Razorpay/UPI payments ──
+    if (event === 'subscription.authenticated' || event === 'subscription.charged') {
+      try {
+        const plan = await Plan.findOne({ external_plan_id: subscription.external_plan_id });
+        if (plan && subscription.userId) {
+          // Convert plan duration to days
+          let durationDays = plan.duration;
+          if (plan.durationUnit === 'week' || plan.durationUnit === 'weeks') durationDays *= 7;
+          else if (plan.durationUnit === 'month' || plan.durationUnit === 'months') durationDays *= 30;
+          else if (plan.durationUnit === 'year' || plan.durationUnit === 'years') durationDays *= 365;
+
+          await RevenueCatService.grantEntitlement(String(subscription.userId), durationDays);
+          invalidateCache(String(subscription.userId));
+          console.log('✅ [RAZORPAY→RC] RevenueCat entitlement granted for Razorpay payment');
+        }
+      } catch (rcError) {
+        // Don't fail the webhook if RC sync fails -- local membership is already created
+        reportError(rcError, { req, extra: { context: 'razorpay_revenuecat_sync', userId: subscription?.userId } });
+        console.error('⚠️ [RAZORPAY→RC] Failed to sync to RevenueCat:', rcError.message);
       }
     }
 

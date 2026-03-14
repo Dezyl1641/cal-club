@@ -11,6 +11,7 @@ Sentry.init({
 
 const http = require('http');
 const jwtMiddleware = require('./middleware/auth');
+const { attachMembershipStatus } = require('./middleware/membership');
 const setupRoutes = require('./routes/index');
 const { connectToMongo } = require('./config/db');
 const { initializeMealReminderCron, getCurrentTimeIST } = require('./services/scheduledNotificationService');
@@ -57,16 +58,19 @@ const server = http.createServer(async (req, res) => {
 
       try {
         jwtMiddleware(req, res, () => {
-          try {
-            setupRoutes(req, res);
-          } catch (err) {
-            reportError(err, { req });
-            console.error('Route error:', err);
-            if (!res.headersSent) {
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: 'Internal server error', details: err.message }));
+          // Attach membership status to req.user (non-blocking)
+          attachMembershipStatus(req, res, () => {
+            try {
+              setupRoutes(req, res);
+            } catch (err) {
+              reportError(err, { req });
+              console.error('Route error:', err);
+              if (!res.headersSent) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Internal server error', details: err.message }));
+              }
             }
-          }
+          });
         });
       } catch (err) {
         reportError(err, { req });

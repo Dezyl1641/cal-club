@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URI = process.env.MONGO_URI_NEW;
 
 async function connectToMongo() {
   try {
@@ -13,6 +13,9 @@ async function connectToMongo() {
       require('../models/schemas/UserOtp');
       require('../models/schemas/UserAuthToken');
       require('../models/schemas/Meal');
+      require('../models/schemas/FoodItem');
+      require('../models/schemas/UnitConversion');
+      require('../models/schemas/NutritionMiss');
       require('../models/schemas/ActivityStore');
     }
     return mongoose.connection;

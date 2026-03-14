@@ -23,8 +23,8 @@ NODE_ENV=development
 # JWT Configuration
 JWT_SECRET=your_super_secret_jwt_key_here
 
-# MongoDB Configuration
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
+# MongoDB Configuration (app uses MONGO_URI_NEW)
+MONGO_URI_NEW=mongodb+srv://username:password@cluster.mongodb.net/database?retryWrites=true&w=majority
 
 # OpenAI Configuration
 OPENAI_API_KEY=sk-your_openai_api_key_here
