@@ -355,7 +355,11 @@ class AuthService {
     const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
     await storeAuthToken(user._id, token, expiresAt);
 
-    return { message: 'Firebase token verified successfully', token };
+    return {
+      message: 'Firebase token verified successfully',
+      token,
+      userId: user._id.toString()
+    };
   }
 }
 
