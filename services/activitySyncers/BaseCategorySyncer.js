@@ -31,6 +31,10 @@ class BaseCategorySyncer {
     const src = normalise(source);
     const id  = buildId(userId, categoryName, src, dateStr);
     const filtered = this.filter(data || []);
+    if (filtered.length === 0) {
+      return { category: categoryName, action: 'ignored', _id: id, reason: 'no_relevant_data' };
+    }
+
     const existing = await ActivityStore.findById(id).lean();
 
     if (existing) {
