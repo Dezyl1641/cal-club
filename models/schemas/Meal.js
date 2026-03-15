@@ -16,6 +16,10 @@ const nutritionSchema = new mongoose.Schema({
   fat: {
     llm: Number,
     final: Number
+  },
+  fiber: {
+    llm: Number,
+    final: Number
   }
 }, { _id: false });
 
@@ -64,7 +68,10 @@ const itemSchema = new mongoose.Schema({
   grams: { type: Number, default: null },
   parentDish: { type: String, default: null },
   componentType: { type: String, default: null }, // 'protein' | 'gravy' when set
-  proteinForm: { type: String, default: null }
+  proteinForm: { type: String, default: null },
+  glycemicIndex: {
+    llm: Number
+  }
 }, { _id: false });
 
 const photoSchema = new mongoose.Schema({
