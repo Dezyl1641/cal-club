@@ -39,6 +39,7 @@ function mapEventToStatus(eventType) {
   const statusMap = {
     'INITIAL_PURCHASE': 'active',
     'RENEWAL': 'active',
+    'NON_RENEWING_PURCHASE': 'active', // Promotional grants from RC API
     'PRODUCT_CHANGE': 'active',
     'CANCELLATION': 'cancelled',
     'UNCANCELLATION': 'active',
@@ -193,8 +194,8 @@ async function processRevenueCatEvent(body) {
     }
   }
 
-  // Handle membership for purchase / renewal events
-  if (eventType === 'INITIAL_PURCHASE' || eventType === 'RENEWAL') {
+  // Handle membership for purchase / renewal / promotional events
+  if (eventType === 'INITIAL_PURCHASE' || eventType === 'RENEWAL' || eventType === 'NON_RENEWING_PURCHASE') {
     try {
       const startDate = purchaseDate || new Date();
       const endDate = expirationDate || new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000); // fallback 30 days
