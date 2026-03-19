@@ -1571,7 +1571,7 @@ async function cloneMeal(req, res) {
     }
 
     const dateUtils = require('../utils/dateUtils');
-    const nowIST = dateUtils.getCurrentDateInIST();
+    const nowIST = dateUtils.getCurrentDateTime();
 
     // Generate new unique IDs for each item
     const clonedItems = originalMeal.items.map((item, index) => ({

@@ -1,3 +1,7 @@
+const { TimezoneConstants } = require('../config/constants');
+
+const DEFAULT_TZ = TimezoneConstants.DEFAULT_TIMEZONE;
+
 /**
  * Utility functions for date/time handling in IST timezone
  */
@@ -5,21 +9,21 @@
 /**
  * Get current date/time in IST (Indian Standard Time, UTC+5:30)
  * Returns a Date object that represents the current IST time
- * 
+ *
  * Note: JavaScript Date objects are always stored as UTC internally.
  * This function creates a Date that represents the current IST moment.
  * When this date is stored in MongoDB (as UTC) and later displayed in IST,
  * it will show the correct IST time.
- * 
+ *
  * Example: If current IST time is 2:00 PM IST, this returns a Date object
  * that stores 8:30 AM UTC (which is 2:00 PM IST).
  */
-function getCurrentDateInIST() {
+
+
+function getCurrentDateTime() {
   const now = new Date();
-  
-  // Get current time components in IST timezone
-  const istFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Kolkata',
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: DEFAULT_TZ,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -29,9 +33,9 @@ function getCurrentDateInIST() {
     hour12: false
   });
   
-  const parts = istFormatter.formatToParts(now);
+  const parts = formatter.formatToParts(now);
   const year = parseInt(parts.find(p => p.type === 'year').value);
-  const month = parseInt(parts.find(p => p.type === 'month').value) - 1; // Month is 0-indexed
+  const month = parseInt(parts.find(p => p.type === 'month').value) - 1;
   const day = parseInt(parts.find(p => p.type === 'day').value);
   const hour = parseInt(parts.find(p => p.type === 'hour').value);
   const minute = parseInt(parts.find(p => p.type === 'minute').value);
@@ -53,7 +57,7 @@ function getCurrentDateInIST() {
  */
 function toIST(date = null) {
   if (!date) {
-    return getCurrentDateInIST();
+    return getCurrentDateTime();
   }
   
   if (typeof date === 'string') {
@@ -62,7 +66,7 @@ function toIST(date = null) {
   
   // Get IST representation of the provided date
   const istString = date.toLocaleString('en-US', {
-    timeZone: 'Asia/Kolkata',
+    timeZone: DEFAULT_TZ,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -82,7 +86,40 @@ function toIST(date = null) {
   return new Date(istDate.getTime() - istOffsetMs);
 }
 
+/**
+ * Resolve any date input (Date, ISO string, or YYYY-MM-DD string) to a YYYY-MM-DD
+ * string in the given timezone. Falls back to today if input is absent or invalid.
+ */
+function resolveDate(input, timezone = DEFAULT_TZ) {
+  if (!input) return getCurrentDateString();
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return getCurrentDateString();
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
+/** Today as YYYY-MM-DD in given timezone (default from TimezoneConstants). */
+function getCurrentDateString(timezone = DEFAULT_TZ) {
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(now);
+}
+
+/** True if dateStr (YYYY-MM-DD) is today in the given timezone. */
+function isToday(dateStr, timezone = DEFAULT_TZ) {
+  if (!dateStr || typeof dateStr !== 'string') return false;
+  return dateStr === getCurrentDateString(timezone);
+}
+
 module.exports = {
-  getCurrentDateInIST,
-  toIST
+  getCurrentDateTime,
+  toIST,
+  getTodayDateString: getCurrentDateString,
+  isToday,
+  resolveDate
 };
