@@ -43,17 +43,15 @@ class FirebaseAuthService {
       // Verify the ID token
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       
-      // Extract phone number and UID
+      // Extract identifiers
       const firebaseUid = decodedToken.uid;
       const phoneNumber = decodedToken.phone_number;
-
-      if (!phoneNumber) {
-        throw new Error('Phone number not found in Firebase token. This token may not be from phone authentication.');
-      }
+      const email = decodedToken.email || null;
 
       return {
         firebaseUid,
-        phone: phoneNumber,
+        phone: phoneNumber || null,
+        email,
         decodedToken
       };
     } catch (error) {

@@ -324,29 +324,49 @@ class AuthService {
   static async verifyFirebaseToken(idToken) {
     // Verify Firebase ID token
     const firebaseData = await FirebaseAuthService.verifyIdToken(idToken);
-    const { firebaseUid, phone } = firebaseData;
+    const { firebaseUid, phone, email } = firebaseData;
 
-    // Find or create user by phone number
-    let user = await findUserByPhone(phone);
-    
+    // Try to find an existing user by:
+    // 1) phone (for phone auth),
+    // 2) firebaseUid (for any provider),
+    // 3) email (for Google / Apple sign-in).
+    let user = null;
+    if (phone) {
+      user = await findUserByPhone(phone);
+    }
+    if (!user && firebaseUid) {
+      const User = require('../models/schemas/User');
+      user = await User.findOne({ firebaseUid, isActive: true });
+    }
+    if (!user && email) {
+      const User = require('../models/schemas/User');
+      user = await User.findOne({ email: email.toLowerCase(), isActive: true });
+    }
+
     if (!user) {
-      // Create new user with phone, firebaseUid, and lastLoginAt
-      user = await createUser({ phone, firebaseUid, lastLoginAt: new Date() });
+      const newUserData = {
+        lastLoginAt: new Date(),
+        firebaseUid
+      };
+      if (phone) newUserData.phone = phone;
+      if (email) newUserData.email = email.toLowerCase();
+      user = await createUser(newUserData);
     } else {
-      // Prepare update data
       const updateData = { lastLoginAt: new Date() };
-      
-      // If user exists but is inactive, reactivate them
+
       if (!user.isActive) {
         updateData.isActive = true;
       }
-      
-      // Link firebaseUid to existing user if not already linked
-      if (!user.firebaseUid) {
+      if (!user.firebaseUid && firebaseUid) {
         updateData.firebaseUid = firebaseUid;
       }
-      
-      // Update user with all changes at once
+      if (!user.email && email) {
+        updateData.email = email.toLowerCase();
+      }
+      if (!user.phone && phone) {
+        updateData.phone = phone;
+      }
+
       user = await updateUser(user._id, updateData);
     }
 
