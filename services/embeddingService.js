@@ -117,34 +117,10 @@ function getFoodSearchText(foodItem) {
   return parts.join(' ');
 }
 
-/**
- * Retry wrapper for embedding generation with exponential backoff
- * Useful for handling transient API errors and rate limits
- * @param {Function} fn - Async function to retry
- * @param {number} maxRetries - Maximum retry attempts (default: 3)
- * @returns {Promise<any>} Result from function
- */
-async function retryWithBackoff(fn, maxRetries = 3) {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      if (attempt === maxRetries) {
-        throw err;
-      }
-
-      const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s
-      console.warn(`Attempt ${attempt} failed, retrying in ${delay}ms...`, err.message);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-}
-
 module.exports = {
   generateEmbedding,
   generateEmbeddingsBatch,
   getFoodSearchText,
-  retryWithBackoff,
   EMBEDDING_MODEL,
   EMBEDDING_DIMENSIONS
 };

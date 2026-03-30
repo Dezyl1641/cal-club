@@ -1,7 +1,6 @@
 const { OpenAI } = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Meal = require('../models/schemas/Meal');
-//test
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -19,7 +18,22 @@ class AiService {
       throw new Error('Invalid data URI format');
     }
 
-    // Handle HTTP(S) URLs
+    // Validate URL to prevent SSRF
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      throw new Error('Invalid URL format');
+    }
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('Only HTTPS URLs are allowed');
+    }
+    const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', 'metadata.google.internal'];
+    if (blockedHosts.includes(parsedUrl.hostname) || parsedUrl.hostname.startsWith('169.254.') || parsedUrl.hostname.startsWith('10.') || parsedUrl.hostname.startsWith('192.168.')) {
+      throw new Error('URL points to a blocked internal address');
+    }
+
+    // Handle HTTPS URLs
     const https = require('https');
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -1053,7 +1067,6 @@ Return only valid JSON, no additional text.`;
    */
   static async analyzeFoodCaloriesV3(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
-      const llmModel = 'gemini-2.5-flash';
       const isTextOnly = !imageUrl && hint;
 
       console.log(`🤖 [V3] ─── Starting V3 pipeline ───`);
@@ -1163,9 +1176,6 @@ Return only valid JSON, no additional text.`;
 
   static async analyzeFoodCaloriesV4(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
-      const llmModel = 'gemini-2.5-flash';
-      const isTextOnly = !imageUrl && hint;
-
       console.log(`🤖 [V4] ─── Starting V4 pipeline (DB-first with per-item waterfall) ───`);
       console.log(`🤖 [V4] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}`);
 
@@ -1184,7 +1194,7 @@ Return only valid JSON, no additional text.`;
       // Step 2: Per-item nutrition lookup with waterfall (USDA → IFCT → LLM cache → LLM)
       console.log(`🤖 [V4] Step 2: Per-item waterfall lookup (USDA → IFCT → cache → LLM)`);
       const NutritionLookupServiceV4 = require('./nutritionLookupServiceV4');
-      const nutritionResult = await NutritionLookupServiceV4.calculateNutrition(quantityParsed.items, llmModel);
+      const nutritionResult = await NutritionLookupServiceV4.calculateNutrition(quantityParsed.items);
 
       console.log(`🤖 [V4] Step 2 complete — ${nutritionResult.items.length} items processed`);
       console.log(`🤖 [V4] Source breakdown: USDA=${nutritionResult.sourceBreakdown.usda}, IFCT=${nutritionResult.sourceBreakdown.ifct}, cached=${nutritionResult.sourceBreakdown.llm_cached}, fresh=${nutritionResult.sourceBreakdown.llm_fresh}, recipe=${nutritionResult.sourceBreakdown.recipe}`);

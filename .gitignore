@@ -189,3 +189,12 @@ pnpm-lock.yaml
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Local utility scripts (keep on disk, not in repo)
+scripts/exportDatabase.js
+scripts/validateNutritionData.js
+scripts/testGemini.js
+scripts/uploadImage.js
+
+# USDA raw data (large, import-only)
+data/usda/

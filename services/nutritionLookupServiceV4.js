@@ -66,9 +66,23 @@ async function dbLookup(item) {
  *   - Components with getRemainder: gets totalGrams minus sum of quantized components
  *   - Normal components: totalGrams × ratio
  */
+// Module-level cache for composite dish mappings
+let mappingsCache = null;
+let mappingsCacheTime = 0;
+const MAPPINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function loadMappings() {
+  const now = Date.now();
+  if (mappingsCache && (now - mappingsCacheTime) < MAPPINGS_CACHE_TTL) {
+    return mappingsCache;
+  }
+  mappingsCache = await CompositeDishMapping.find({}).lean();
+  mappingsCacheTime = now;
+  return mappingsCache;
+}
+
 async function decomposeComposites(items) {
-  // Load all mappings once
-  const mappings = await CompositeDishMapping.find({}).lean();
+  const mappings = await loadMappings();
 
   // Build lookup: lowercase name/alias → mapping
   const mappingLookup = new Map();
@@ -82,7 +96,7 @@ async function decomposeComposites(items) {
   const result = [];
 
   for (const item of items) {
-    const mapping = mappingLookup.get(item.name.toLowerCase());
+    const mapping = item.name ? mappingLookup.get(item.name.toLowerCase()) : null;
 
     if (!mapping) {
       // Not a composite dish — pass through unchanged
@@ -107,18 +121,28 @@ async function decomposeComposites(items) {
       }
     }
 
-    // Second pass: remainder components
-    for (const comp of mapping.components) {
-      if (comp.getRemainder) {
-        const remainderGrams = totalGrams - quantizedTotal;
-        componentGrams.set(comp.name, Math.max(remainderGrams, 0));
-      }
-    }
-
-    // Third pass: normal components (no quantization, no remainder)
-    for (const comp of mapping.components) {
-      if (!comp.quantization && !comp.getRemainder) {
+    // Guard: if quantized total exceeds dish total, fall back to ratio-only
+    if (quantizedTotal > totalGrams) {
+      console.warn(`[Composite] Quantization overflow for "${item.name}" (${totalGrams}g): quantized=${quantizedTotal}g. Falling back to ratio-only.`);
+      componentGrams.clear();
+      quantizedTotal = 0;
+      for (const comp of mapping.components) {
         componentGrams.set(comp.name, Math.round(totalGrams * comp.ratio));
+      }
+    } else {
+      // Second pass: remainder components
+      for (const comp of mapping.components) {
+        if (comp.getRemainder) {
+          const remainderGrams = totalGrams - quantizedTotal;
+          componentGrams.set(comp.name, Math.max(remainderGrams, 0));
+        }
+      }
+
+      // Third pass: normal components (no quantization, no remainder)
+      for (const comp of mapping.components) {
+        if (!comp.quantization && !comp.getRemainder) {
+          componentGrams.set(comp.name, Math.round(totalGrams * comp.ratio));
+        }
       }
     }
 
@@ -178,12 +202,15 @@ Rules:
   const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const llmResults = JSON.parse(jsonStr);
 
-  // Build a map: name → nutrition
+  // Build a map: name → nutrition (match by name, not array position)
   const nutritionMap = {};
-  for (let i = 0; i < foodItems.length; i++) {
-    const llmData = llmResults[i];
-    if (llmData && typeof llmData.caloriesPer100g === 'number') {
-      nutritionMap[foodItems[i].name] = llmData;
+  for (const llmData of llmResults) {
+    if (llmData && llmData.name && typeof llmData.caloriesPer100g === 'number') {
+      // Find the original food item name (case-insensitive match)
+      const originalItem = foodItems.find(f => f.name.toLowerCase() === llmData.name.toLowerCase());
+      if (originalItem) {
+        nutritionMap[originalItem.name] = llmData;
+      }
     }
   }
 
@@ -197,27 +224,32 @@ Rules:
 async function cacheLLMResults(nutritionMap, foodItems) {
   const cachedFoods = {};
 
-  // Generate embeddings in parallel for all items
-  const embeddingPromises = foodItems.map(async (f) => {
-    const llmData = nutritionMap[f.name];
-    if (!llmData) return null;
+  // Filter to items that have LLM data
+  const itemsToCache = foodItems.filter(f => nutritionMap[f.name]);
+  if (itemsToCache.length === 0) return cachedFoods;
 
-    let embedding = null;
-    try {
-      const searchText = embeddingService.getFoodSearchText({
-        name: f.name,
-        category: f.category || 'other',
-        aliases: []
-      });
-      embedding = await embeddingService.generateEmbedding(searchText);
-    } catch (embErr) {
-      console.warn(`Failed to generate embedding for "${f.name}":`, embErr.message);
-    }
+  // Generate all embeddings in a single batch call
+  const searchTexts = itemsToCache.map(f =>
+    embeddingService.getFoodSearchText({
+      name: f.name,
+      category: f.category || 'other',
+      aliases: []
+    })
+  );
 
-    return { name: f.name, category: f.category, llmData, embedding };
-  });
+  let embeddings = new Array(itemsToCache.length).fill(null);
+  try {
+    embeddings = await embeddingService.generateEmbeddingsBatch(searchTexts);
+  } catch (embErr) {
+    console.warn(`Failed to generate batch embeddings:`, embErr.message);
+  }
 
-  const results = await Promise.all(embeddingPromises);
+  const results = itemsToCache.map((f, i) => ({
+    name: f.name,
+    category: f.category,
+    llmData: nutritionMap[f.name],
+    embedding: embeddings[i] || null
+  }));
 
   for (const r of results) {
     if (!r) continue;

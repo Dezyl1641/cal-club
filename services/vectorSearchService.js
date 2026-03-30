@@ -16,16 +16,15 @@ const embeddingService = require('./embeddingService');
  * @returns {number} Confidence value (0-1)
  */
 function mapScoreToConfidence(score) {
-  // Cosine similarity interpretation:
-  // > 0.9 = very high similarity (exact or near-exact match)
-  // 0.7-0.9 = high similarity (clear semantic match)
-  // 0.5-0.7 = medium similarity (related concepts)
-  // < 0.5 = low similarity (weak match)
-
-  if (score > 0.9) return 0.95;  // Very high confidence
-  if (score > 0.7) return 0.85;  // High confidence
-  if (score > 0.5) return 0.75;  // Medium confidence
-  return score * 0.7;            // Penalize low scores
+  // Linear mapping from cosine similarity to confidence
+  // Ensures scores above 0.7 cosine can pass the 0.9 confidence threshold
+  // used by matchFood's dbLookup caller
+  if (score >= 0.95) return 0.98;
+  if (score >= 0.85) return 0.95;
+  if (score >= 0.75) return 0.92;
+  if (score >= 0.65) return 0.85;
+  if (score >= 0.50) return 0.75;
+  return score * 0.7;
 }
 
 /**
@@ -47,16 +46,23 @@ async function semanticSearch(queryText, category = null, limit = 5) {
     const queryEmbedding = await embeddingService.generateEmbedding(queryText);
 
     // Step 2: Build MongoDB Atlas $vectorSearch pipeline
+    const vectorSearchStage = {
+      $vectorSearch: {
+        index: 'food_embedding_index',
+        path: 'embedding',
+        queryVector: queryEmbedding,
+        numCandidates: category ? 150 : 50,  // More candidates when filtering by category
+        limit: category ? limit * 3 : limit  // Over-fetch when filtering
+      }
+    };
+
+    // Pre-filter by category if provided (uses Atlas vector search filter)
+    if (category) {
+      vectorSearchStage.$vectorSearch.filter = { category: category };
+    }
+
     const pipeline = [
-      {
-        $vectorSearch: {
-          index: 'food_embedding_index',
-          path: 'embedding',
-          queryVector: queryEmbedding,
-          numCandidates: 50,  // Number of candidates for HNSW algorithm
-          limit: limit
-        }
-      },
+      vectorSearchStage,
       {
         $project: {
           name: 1,
@@ -82,14 +88,8 @@ async function semanticSearch(queryText, category = null, limit = 5) {
 
     const latency = Date.now() - startTime;
 
-    // Step 4: Filter by category if provided (post-search filter)
-    let filteredResults = results;
-    if (category) {
-      filteredResults = results.filter(r => r.category === category);
-    }
-
-    // Step 5: Map to expected format with confidence scores
-    const mappedResults = filteredResults.map(result => ({
+    // Step 4: Map to expected format with confidence scores
+    const mappedResults = results.slice(0, limit).map(result => ({
       food: result,
       confidence: mapScoreToConfidence(result.score),
       strategy: 'semantic_search',
@@ -124,60 +124,7 @@ async function semanticSearch(queryText, category = null, limit = 5) {
   }
 }
 
-/**
- * Check if vector search index exists
- * @returns {Promise<boolean>} True if index exists
- */
-async function checkVectorIndexExists() {
-  try {
-    // Try a simple vector search query
-    const testEmbedding = new Array(768).fill(0);
-    await FoodItem.aggregate([
-      {
-        $vectorSearch: {
-          index: 'food_embedding_index',
-          path: 'embedding',
-          queryVector: testEmbedding,
-          numCandidates: 1,
-          limit: 1
-        }
-      }
-    ]);
-    return true;
-  } catch (err) {
-    if (err.message.includes('index not found') || err.message.includes('food_embedding_index')) {
-      return false;
-    }
-    throw err;
-  }
-}
-
-/**
- * Get statistics about vector search coverage
- * @returns {Promise<Object>} Statistics object
- */
-async function getVectorSearchStats() {
-  const total = await FoodItem.countDocuments();
-  const withEmbeddings = await FoodItem.countDocuments({ embedding: { $ne: null } });
-  const byDataSource = await FoodItem.aggregate([
-    { $match: { embedding: { $ne: null } } },
-    { $group: { _id: '$dataSource', count: { $sum: 1 } } }
-  ]);
-
-  return {
-    total,
-    withEmbeddings,
-    coveragePercent: (withEmbeddings / total * 100).toFixed(1),
-    byDataSource: byDataSource.reduce((acc, item) => {
-      acc[item._id] = item.count;
-      return acc;
-    }, {})
-  };
-}
-
 module.exports = {
   semanticSearch,
-  checkVectorIndexExists,
-  getVectorSearchStats,
   mapScoreToConfidence
 };
