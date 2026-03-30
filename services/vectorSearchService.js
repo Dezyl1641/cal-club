@@ -16,14 +16,14 @@ const embeddingService = require('./embeddingService');
  * @returns {number} Confidence value (0-1)
  */
 function mapScoreToConfidence(score) {
-  // Linear mapping from cosine similarity to confidence
-  // Ensures scores above 0.7 cosine can pass the 0.9 confidence threshold
-  // used by matchFood's dbLookup caller
+  // Cosine similarity → confidence mapping
+  // Only cosine >= 0.80 passes the 0.9 confidence threshold used by dbLookup
+  // Based on observed data: 0.81+ = good matches, 0.79- = bad matches
   if (score >= 0.95) return 0.98;
   if (score >= 0.85) return 0.95;
-  if (score >= 0.75) return 0.92;
-  if (score >= 0.65) return 0.85;
-  if (score >= 0.50) return 0.75;
+  if (score >= 0.80) return 0.92;
+  if (score >= 0.70) return 0.85;
+  if (score >= 0.50) return 0.72;
   return score * 0.7;
 }
 
