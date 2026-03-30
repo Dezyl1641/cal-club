@@ -22,7 +22,7 @@ async function dbLookup(item) {
     };
   }
 
-  const matchResult = await matchFood(name, category, 0.9);
+  const matchResult = await matchFood(name, category, 0.80);
 
   if (matchResult && matchResult.food) {
     const { food, confidence, strategy } = matchResult;

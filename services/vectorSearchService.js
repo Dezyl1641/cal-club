@@ -9,23 +9,7 @@ const embeddingService = require('./embeddingService');
  * Expected latency: 50-100ms for 1.4K vectors
  */
 
-/**
- * Map Atlas vector search score to confidence (0-1 range)
- * Atlas returns cosine similarity scores between 0-1
- * @param {number} score - Vector search score (cosine similarity)
- * @returns {number} Confidence value (0-1)
- */
-function mapScoreToConfidence(score) {
-  // Cosine similarity → confidence mapping
-  // Only cosine >= 0.80 passes the 0.9 confidence threshold used by dbLookup
-  // Based on observed data: 0.81+ = good matches, 0.79- = bad matches
-  if (score >= 0.95) return 0.98;
-  if (score >= 0.85) return 0.95;
-  if (score >= 0.80) return 0.92;
-  if (score >= 0.70) return 0.85;
-  if (score >= 0.50) return 0.72;
-  return score * 0.7;
-}
+const MIN_VECTOR_SCORE = 0.80; // Minimum cosine similarity to accept a match
 
 /**
  * Perform semantic search using vector embeddings
@@ -51,12 +35,12 @@ async function semanticSearch(queryText, category = null, limit = 5) {
         index: 'food_embedding_index',
         path: 'embedding',
         queryVector: queryEmbedding,
-        numCandidates: category ? 150 : 50,  // More candidates when filtering by category
-        limit: category ? limit * 3 : limit  // Over-fetch when filtering
+        numCandidates: category ? 150 : 50,
+        limit: category ? limit * 3 : limit
       }
     };
 
-    // Pre-filter by category if provided (uses Atlas vector search filter)
+    // Pre-filter by category if provided
     if (category) {
       vectorSearchStage.$vectorSearch.filter = { category: category };
     }
@@ -88,14 +72,18 @@ async function semanticSearch(queryText, category = null, limit = 5) {
 
     const latency = Date.now() - startTime;
 
-    // Step 4: Map to expected format with confidence scores
-    const mappedResults = results.slice(0, limit).map(result => ({
-      food: result,
-      confidence: mapScoreToConfidence(result.score),
-      strategy: 'semantic_search',
-      vectorScore: result.score,
-      latencyMs: latency
-    }));
+    // Step 4: Filter by minimum score and map to expected format
+    // Threshold on raw cosine score directly — simpler and more predictable
+    const mappedResults = results
+      .slice(0, limit)
+      .filter(result => result.score >= MIN_VECTOR_SCORE)
+      .map(result => ({
+        food: result,
+        confidence: result.score,
+        strategy: 'semantic_search',
+        vectorScore: result.score,
+        latencyMs: latency
+      }));
 
     // Log for monitoring
     console.log({
@@ -115,7 +103,6 @@ async function semanticSearch(queryText, category = null, limit = 5) {
   } catch (err) {
     console.error(`Semantic search error for "${queryText}":`, err);
 
-    // Handle specific MongoDB errors
     if (err.message.includes('index not found') || err.message.includes('food_embedding_index')) {
       throw new Error('Vector search index not found. Please create "food_embedding_index" in MongoDB Atlas.');
     }
@@ -126,5 +113,5 @@ async function semanticSearch(queryText, category = null, limit = 5) {
 
 module.exports = {
   semanticSearch,
-  mapScoreToConfidence
+  MIN_VECTOR_SCORE
 };
