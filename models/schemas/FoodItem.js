@@ -13,12 +13,21 @@ const foodItemSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['protein', 'grain', 'fat', 'vegetable', 'fruit', 'sauce', 'beverage', 'dairy', 'nuts', 'legumes', 'other'],
+    enum: ['protein', 'grain', 'fat', 'vegetable', 'fruit', 'sauce', 'beverage', 'dairy', 'nuts', 'legumes', 'gravy', 'biryani_rice', 'other'],
     required: true
+  },
+  itemType: {
+    type: String,
+    enum: ['single_item', 'composite_dish'],
+    default: 'single_item'
+  },
+  reviewed: {
+    type: Boolean,
+    default: false
   },
   dataSource: {
     type: String,
-    enum: ['USDA', 'IFCT', 'LLM', 'MANUAL'],
+    enum: ['USDA', 'IFCT', 'LLM', 'MANUAL', 'INDB_DERIVED'],
     required: true,
     index: true
   },
@@ -62,6 +71,25 @@ const foodItemSchema = new mongoose.Schema({
     default: null
   },
   llmGeneratedAt: {
+    type: Date,
+    default: null
+  },
+  // Embedding fields for semantic search (RAG)
+  embedding: {
+    type: [Number],
+    default: null,
+    validate: {
+      validator: function(v) {
+        return !v || v.length === 768; // 768 dimensions for OpenAI text-embedding-3-small
+      },
+      message: 'Embedding must be exactly 768 dimensions'
+    }
+  },
+  embeddingModel: {
+    type: String,
+    default: null
+  },
+  embeddingGeneratedAt: {
     type: Date,
     default: null
   }

@@ -10,16 +10,38 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 class AiService {
   static async fetchImageAsBase64(url) {
+    // Handle data URIs directly
+    if (url.startsWith('data:')) {
+      const matches = url.match(/^data:image\/[a-z]+;base64,(.+)$/i);
+      if (matches && matches[1]) {
+        return matches[1];
+      }
+      throw new Error('Invalid data URI format');
+    }
+
+    // Handle HTTP(S) URLs
     const https = require('https');
     return new Promise((resolve, reject) => {
-      https.get(url, (resp) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Image fetch timeout after 30 seconds'));
+      }, 30000);
+
+      https.get(url, { timeout: 30000 }, (resp) => {
         let data = [];
         resp.on('data', (chunk) => data.push(chunk));
         resp.on('end', () => {
+          clearTimeout(timeout);
           const buffer = Buffer.concat(data);
           resolve(buffer.toString('base64'));
         });
-      }).on('error', reject);
+        resp.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      }).on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
     });
   }
 
@@ -711,34 +733,87 @@ Return only valid JSON, no additional text.`;
     });
 
     const enhancedPrompt = `ROLE
-Food identification and portion estimation specialist with classification capabilities.
+Food identification and portion estimation specialist. Identify food items in a photo and estimate quantities. Do NOT calculate calories or macros.
 
 INPUTS
 1. Image: Meal photo in served state.
 ${hint ? `2. User Hint: "${hint}"` : ''}
 
-CLASSIFICATION REQUIREMENTS
-For each item, classify as:
-1. **itemType**: "composite_dish" or "single_item"
-   - composite_dish: User might eat components separately (butter chicken, biryani, omelet)
-   - single_item: Consumed as whole unit (dal makhani, pizza, rice)
+${hint ? `USER HINT PRIORITY
+When a User Hint is provided, always prioritize it over visual evidence — even if the image appears to contradict it. The user knows what they ate.
+Examples:
+* User says "3 eggs" but image shows 2 visible → output 3 eggs.
+* User says "oat milk latte" but image just shows a cup of coffee → output oat milk latte.
+* User says "chicken biryani" but it visually looks like pulao → output chicken biryani.
+` : ''}
+ITEM IDENTIFICATION
+Naming: Be specific when visually distinguishable (e.g., "jeera rice" not "rice", "sourdough bread" not "bread", "soba noodles" not "noodles"). Use general name when variant is unclear.
 
-2. **category**: protein, grain, fat, vegetable, fruit, sauce, beverage, dairy, nuts, legumes, other
+Composite dish detection:
+If a food item has multiple substantial components cooked/mixed together or served in the same vessel (e.g., biryani, pasta with sauce, curry with protein, burrito, poke bowl, noodle bowls), set "composite": true. Otherwise set "composite": false.
 
-COMPOSITE DISH HANDLING
-For composite_dish items:
-- Estimate serving size (0.5, 1, 1.5, 2 servings)
-- DO NOT estimate component quantities (recipe database will handle this)
-- Provide serving unit (bowl, plate, cup, piece)
+Garnishes and minor toppings (coriander, sesame seeds, lemon wedge, fried onions) do not make a dish composite. Ignore them.
 
-For single_item:
-- Provide category
-- Estimate display quantity (5 pieces, 2 cups, 1 tbsp)
-- Estimate grams
+Do NOT break down composite dishes. Report them as a single item with total grams.
+
+Do not break down items served in separate vessels or clearly occupying distinct areas of the plate — list them independently without parentheses.
+
+Packaged/branded items: Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
+
+LIST EVERY VISIBLE FOOD ITEM. Scan the entire image systematically:
+* Check all areas of the plate/bowl/table
+* Include small items like condiments, garnishes, side items
+* Include beverages if visible
+* Include bread, rice, or other items in background or side plates
+* Don't skip items just because they're small or partially visible
+
+If no food is visible in the image (e.g., blurry, dark, empty plate, non-food photo), return { "items": [] }.
 
 QUANTITY ESTIMATION
-Same as existing rules: use cups, pieces, bowl sizes, etc.
-Gram estimation required for all items.
+Size references:
+* Standard dinner plate: ~26 cm diameter. Side/quarter plate: ~18 cm.
+* Small bowl: ~150 ml. Medium bowl: ~250 ml. Large bowl: ~400 ml. Glass: ~250 ml.
+
+Units by food type:
+* Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count — 2 rotis, 3 slices
+* Rice/grains/pasta: cups — 1 cup, 0.75 cup
+* Egg dishes (omelette, scrambled, bhurji): estimate number of eggs first (1 egg = 50g). Output as "2 eggs", not "pieces" or generic grams.
+* Soups/dal/curry/gravy/sauces: bowl size or tbsp — 1 small bowl, 3 tbsp
+* Cooked vegetables: bowl size — 0.5 small bowl
+* Protein (chicken, fish, paneer, tofu, meat): count + form — 3 boneless pieces, 2 bone-in pieces, 8 paneer cubes, 1 fillet, 2 whole eggs
+* Beverages: glass or cup — 1 glass
+* Fruits: count or cups — 1 banana, 0.5 cup grapes
+
+Principles:
+* Always count explicitly when items are individually distinguishable.
+* For scoopable/pourable foods, estimate area coverage on plate and convert to cups or bowl size.
+* When uncertain between two close quantities, choose the midpoint.
+
+Gram estimation — USE THESE REFERENCE WEIGHTS:
+* 1 cup cooked rice = 150g
+* 1 cup cooked pasta = 140g
+* 1 medium chicken breast (boneless) = 120g
+* 1 medium egg = 50g
+* 1 slice bread = 30g
+* 1 roti/chapati = 30g
+* 1 medium apple = 150g
+* 1 cup raw leafy vegetables = 30g
+* 1 cup cooked vegetables = 150g
+
+For volume-based items: 1 cup = 180g, small bowl = 150g, medium bowl = 250g, large bowl = 400g, 1 glass = 250ml, 1 tbsp = 15g.
+
+For bone-in items, estimate total weight including bone.
+
+For composite dishes, estimate total grams of the entire dish as served.
+
+PORTION SIZE CALIBRATION: Photos often make portions appear larger than they are. Apply these conservative estimates:
+* Single protein serving: 80-120g (not 200-300g)
+* Single rice/grain serving: 100-150g (not 300-500g)
+* Vegetable side: 50-100g (not 200-400g)
+* Gravy/sauce: 50-100g (not 200-300g)
+* Full single-person meal: typically 250-400g total
+
+When estimating grams, start from the lower end of typical ranges unless the portion clearly appears oversized.
 
 OUTPUT
 Return ONLY raw JSON. No markdown, no explanation.
@@ -746,45 +821,20 @@ Return ONLY raw JSON. No markdown, no explanation.
 {
   "mealName": "Overall meal name",
   "items": [
-    {
-      "name": "Item name",
-      "itemType": "composite_dish" | "single_item",
-      "category": "protein|grain|fat|vegetable|fruit|sauce|beverage|dairy|nuts|legumes|other",
-
-      // For composite_dish:
-      "servingSize": 1.5,
-      "servingUnit": "bowl",
-
-      // For single_item:
-      "quantity": { "value": 5, "unit": "pieces" },
-      "quantityAlternate": { "value": 250, "unit": "grams" },
-      "pieceWeight": 50,  // For proteins: 1 piece = Xg
-
-      "confidence": 0.9
-    }
+    { "name": "Item name", "quantity": "Estimated quantity", "grams": 0, "composite": false }
   ]
 }
 
-EXAMPLES
+EXAMPLE
 
-Composite dish:
 {
-  "name": "Butter Chicken",
-  "itemType": "composite_dish",
-  "category": "protein",
-  "servingSize": 1,
-  "servingUnit": "bowl",
-  "confidence": 0.9
-}
-
-Simple item:
-{
-  "name": "Rice",
-  "itemType": "single_item",
-  "category": "grain",
-  "quantity": { "value": 1, "unit": "cup" },
-  "quantityAlternate": { "value": 180, "unit": "grams" },
-  "confidence": 0.9
+  "mealName": "Indian Thali",
+  "items": [
+    { "name": "Chicken Biryani", "quantity": "1 plate", "grams": 300, "composite": true },
+    { "name": "Dal", "quantity": "1 small bowl", "grams": 150, "composite": false },
+    { "name": "Roti", "quantity": "2 rotis", "grams": 60, "composite": false },
+    { "name": "Raita", "quantity": "0.5 small bowl", "grams": 75, "composite": false }
+  ]
 }
 
 Return only valid JSON, no additional text.`;
@@ -1126,10 +1176,9 @@ Return only valid JSON, no additional text.`;
       console.log(`🤖 [V4] Step 1 complete — ${quantityParsed.items.length} items identified, mealName="${quantityParsed.mealName}"`);
 
       quantityParsed.items.forEach((item, i) => {
-        const itemType = item.itemType || 'single_item';
-        const category = item.category || 'unknown';
+        const composite = item.composite ? 'composite' : 'single';
         const grams = item.grams || item.quantityAlternate?.value || 'N/A';
-        console.log(`🤖 [V4]   item[${i}]: "${item.name}" | type=${itemType} | category=${category} | grams=${grams}`);
+        console.log(`🤖 [V4]   item[${i}]: "${item.name}" | ${composite} | grams=${grams}`);
       });
 
       // Step 2: Per-item nutrition lookup with waterfall (USDA → IFCT → LLM cache → LLM)
@@ -1149,20 +1198,25 @@ Return only valid JSON, no additional text.`;
       // Save meal with enhanced tracking
       let savedMeal = null;
       if (userId) {
-        const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
-        console.log(`🤖 [V4] Saving meal for userId=${userId} with source tracking`);
-        savedMeal = await this.saveMealDataForV4(
-          userId,
-          imageReference,
-          {
-            mealName: quantityParsed.mealName,
-            items: nutritionResult.items,
-            totalNutrition: nutritionResult.totalNutrition
-          },
-          additionalData,
-          quantityRaw.tokens
-        );
-        console.log(`🤖 [V4] Meal saved: mealId=${savedMeal?._id}`);
+        try {
+          const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
+          console.log(`🤖 [V4] Saving meal for userId=${userId} with source tracking`);
+          savedMeal = await this.saveMealDataForV4(
+            userId,
+            imageReference,
+            {
+              mealName: quantityParsed.mealName,
+              items: nutritionResult.items,
+              totalNutrition: nutritionResult.totalNutrition
+            },
+            additionalData,
+            quantityRaw.tokens
+          );
+          console.log(`🤖 [V4] Meal saved: mealId=${savedMeal?._id}`);
+        } catch (saveErr) {
+          console.error(`⚠️ [V4] Failed to save meal (non-fatal): ${saveErr.message}`);
+          // Continue anyway - return results even if save failed
+        }
       }
 
       const coverage = nutritionResult.coverage;

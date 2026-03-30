@@ -66,7 +66,7 @@ const itemSchema = new mongoose.Schema({
   confidence: Number,
   nutritionSource: {
     type: String,
-    enum: ['usda', 'ifct', 'llm_cached', 'llm_fresh', 'recipe', 'db', 'llm_fallback'],
+    enum: ['usda', 'ifct', 'llm_cached', 'llm_fresh', 'recipe', 'db', 'llm_fallback', 'llm_fresh_needed', 'missing'],
     default: null
   },
   foodItemId: {

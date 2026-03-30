@@ -1,5 +1,6 @@
 const FoodItem = require('../models/schemas/FoodItem');
 const FoodItemAlias = require('../models/schemas/FoodItemAlias');
+const vectorSearchService = require('./vectorSearchService');
 
 /**
  * Calculate Levenshtein distance between two strings
@@ -83,7 +84,20 @@ async function caseInsensitiveMatch(foodName) {
 }
 
 /**
- * Strategy 3: MongoDB text search
+ * Strategy 3: Case-insensitive match against FoodItem.aliases array
+ */
+async function aliasFieldMatch(foodName) {
+  const food = await FoodItem.findOne({
+    aliases: { $regex: new RegExp(`^${foodName}$`, 'i') }
+  });
+  if (food) {
+    return { food, confidence: 0.92, strategy: 'alias_field', matchedAlias: foodName };
+  }
+  return null;
+}
+
+/**
+ * Strategy 4: MongoDB text search
  */
 async function textSearch(foodName, category = null) {
   const query = { $text: { $search: foodName } };
@@ -193,24 +207,36 @@ async function matchFood(foodName, category = null, confidenceThreshold = 0.7) {
 
   // Try strategies in order
   const strategies = [
-    () => exactMatch(trimmedName),
-    () => caseInsensitiveMatch(trimmedName),
-    () => textSearch(trimmedName, category),
-    () => aliasLookup(trimmedName),
-    () => singularPluralMatch(trimmedName),
-    () => fuzzyMatch(trimmedName)
+    () => exactMatch(trimmedName),                                    // Fast exact match
+    () => caseInsensitiveMatch(trimmedName),                          // Fast case-insensitive match
+    () => aliasFieldMatch(trimmedName),                               // Fast alias array match on FoodItem
+    () => vectorSearchService.semanticSearch(trimmedName, category, 5), // Semantic search (primary strategy)
+    () => aliasLookup(trimmedName)                                    // Alias lookup via FoodItemAlias collection
   ];
 
   for (const strategy of strategies) {
     try {
       const result = await strategy();
-      if (result && result.confidence >= confidenceThreshold) {
-        // Increment food usage count
-        if (result.food) {
-          result.food.usageCount += 1;
-          await result.food.save();
+
+      // Handle both single result and array of results (from semantic search)
+      const matchResult = Array.isArray(result) ? result[0] : result;
+
+      if (matchResult && matchResult.confidence >= confidenceThreshold) {
+        // Try to increment food usage count (non-blocking)
+        if (matchResult.food && matchResult.food._id) {
+          try {
+            // Use findByIdAndUpdate for plain objects from aggregation (semantic search)
+            await FoodItem.findByIdAndUpdate(
+              matchResult.food._id,
+              { $inc: { usageCount: 1 } },
+              { new: false }
+            ).exec();
+          } catch (saveErr) {
+            // Log but don't fail the match if usageCount update fails
+            console.warn(`Failed to update usageCount for ${matchResult.food.name}:`, saveErr.message);
+          }
         }
-        return result;
+        return matchResult;
       }
     } catch (err) {
       console.error(`Error in matching strategy:`, err);
