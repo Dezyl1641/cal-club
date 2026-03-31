@@ -15,6 +15,7 @@ const { attachMembershipStatus } = require('./middleware/membership');
 const setupRoutes = require('./routes/index');
 const { connectToMongo } = require('./config/db');
 const { initializeMealReminderCron, getCurrentTimeIST } = require('./services/scheduledNotificationService');
+const { initializeHeroBriefCron } = require('./services/heroBriefCron');
 
 const PORT = process.env.PORT || 3000;
 const { reportError } = require('./utils/sentryReporter');
@@ -89,7 +90,8 @@ connectToMongo().then(() => {
     console.log(`Server running at http://localhost:${PORT}/`);
     console.log(`Current IST time: ${getCurrentTimeIST()}`);
     
-    // Initialize meal reminder cron job
+    // Initialize cron jobs
     initializeMealReminderCron();
+    initializeHeroBriefCron();
   });
 }); 
