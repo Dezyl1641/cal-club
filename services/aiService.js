@@ -1,7 +1,6 @@
 const { OpenAI } = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Meal = require('../models/schemas/Meal');
-//test
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -10,16 +9,53 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 class AiService {
   static async fetchImageAsBase64(url) {
+    // Handle data URIs directly
+    if (url.startsWith('data:')) {
+      const matches = url.match(/^data:image\/[a-z]+;base64,(.+)$/i);
+      if (matches && matches[1]) {
+        return matches[1];
+      }
+      throw new Error('Invalid data URI format');
+    }
+
+    // Validate URL to prevent SSRF
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      throw new Error('Invalid URL format');
+    }
+    if (parsedUrl.protocol !== 'https:') {
+      throw new Error('Only HTTPS URLs are allowed');
+    }
+    const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '[::1]', 'metadata.google.internal'];
+    if (blockedHosts.includes(parsedUrl.hostname) || parsedUrl.hostname.startsWith('169.254.') || parsedUrl.hostname.startsWith('10.') || parsedUrl.hostname.startsWith('192.168.')) {
+      throw new Error('URL points to a blocked internal address');
+    }
+
+    // Handle HTTPS URLs
     const https = require('https');
     return new Promise((resolve, reject) => {
-      https.get(url, (resp) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('Image fetch timeout after 30 seconds'));
+      }, 30000);
+
+      https.get(url, { timeout: 30000 }, (resp) => {
         let data = [];
         resp.on('data', (chunk) => data.push(chunk));
         resp.on('end', () => {
+          clearTimeout(timeout);
           const buffer = Buffer.concat(data);
           resolve(buffer.toString('base64'));
         });
-      }).on('error', reject);
+        resp.on('error', (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        });
+      }).on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
     });
   }
 
@@ -700,6 +736,140 @@ Return only valid JSON, no additional text.`;
   }
 
   /**
+   * Enhanced Prompt 1 for V4: Adds itemType classification and category tagging
+   */
+  static async analyzeQuantityWithGeminiV4(imageUrl, hint) {
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [GEMINI-V4-STEP1] Using model: ${modelName} for enhanced quantity analysis`);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { temperature: 0.1 }
+    });
+
+    const enhancedPrompt = `ROLE
+Food identification and portion estimation specialist. Identify food items in a photo and estimate quantities. Do NOT calculate calories or macros.
+
+INPUTS
+1. Image: Meal photo in served state.
+${hint ? `2. User Hint: "${hint}"` : ''}
+
+${hint ? `USER HINT PRIORITY
+When a User Hint is provided, always prioritize it over visual evidence — even if the image appears to contradict it. The user knows what they ate.
+Examples:
+* User says "3 eggs" but image shows 2 visible → output 3 eggs.
+* User says "oat milk latte" but image just shows a cup of coffee → output oat milk latte.
+* User says "chicken biryani" but it visually looks like pulao → output chicken biryani.
+` : ''}
+ITEM IDENTIFICATION
+Naming: Be specific when visually distinguishable (e.g., "jeera rice" not "rice", "sourdough bread" not "bread", "soba noodles" not "noodles"). Use general name when variant is unclear.
+
+Composite dish detection:
+If a food item has multiple substantial components cooked/mixed together or served in the same vessel (e.g., biryani, pasta with sauce, curry with protein, burrito, poke bowl, noodle bowls), set "composite": true. Otherwise set "composite": false.
+
+Garnishes and minor toppings (coriander, sesame seeds, lemon wedge, fried onions) do not make a dish composite. Ignore them.
+
+Do NOT break down composite dishes. Report them as a single item with total grams.
+
+Do not break down items served in separate vessels or clearly occupying distinct areas of the plate — list them independently without parentheses.
+
+Packaged/branded items: Use brand and product name. Use package size as quantity (e.g., "Amul Greek Yogurt 100g cup", "Kind Protein Bar 1 bar").
+
+LIST EVERY VISIBLE FOOD ITEM. Scan the entire image systematically:
+* Check all areas of the plate/bowl/table
+* Include small items like condiments, garnishes, side items
+* Include beverages if visible
+* Include bread, rice, or other items in background or side plates
+* Don't skip items just because they're small or partially visible
+
+If no food is visible in the image (e.g., blurry, dark, empty plate, non-food photo), return { "items": [] }.
+
+QUANTITY ESTIMATION
+Size references:
+* Standard dinner plate: ~26 cm diameter. Side/quarter plate: ~18 cm.
+* Small bowl: ~150 ml. Medium bowl: ~250 ml. Large bowl: ~400 ml. Glass: ~250 ml.
+
+Units by food type:
+* Countable items (roti, bread slice, egg, taco, dumpling, idli, puri): count — 2 rotis, 3 slices
+* Rice/grains/pasta: cups — 1 cup, 0.75 cup
+* Egg dishes (omelette, scrambled, bhurji): estimate number of eggs first (1 egg = 50g). Output as "2 eggs", not "pieces" or generic grams.
+* Soups/dal/curry/gravy/sauces: bowl size or tbsp — 1 small bowl, 3 tbsp
+* Cooked vegetables: bowl size — 0.5 small bowl
+* Protein (chicken, fish, paneer, tofu, meat): count + form — 3 boneless pieces, 2 bone-in pieces, 8 paneer cubes, 1 fillet, 2 whole eggs
+* Beverages: glass or cup — 1 glass
+* Fruits: count or cups — 1 banana, 0.5 cup grapes
+
+Principles:
+* Always count explicitly when items are individually distinguishable.
+* For scoopable/pourable foods, estimate area coverage on plate and convert to cups or bowl size.
+* When uncertain between two close quantities, choose the midpoint.
+
+Gram estimation — USE THESE REFERENCE WEIGHTS:
+* 1 cup cooked rice = 150g
+* 1 cup cooked pasta = 140g
+* 1 medium chicken breast (boneless) = 120g
+* 1 medium egg = 50g
+* 1 slice bread = 30g
+* 1 roti/chapati = 30g
+* 1 medium apple = 150g
+* 1 cup raw leafy vegetables = 30g
+* 1 cup cooked vegetables = 150g
+
+For volume-based items: 1 cup = 180g, small bowl = 150g, medium bowl = 250g, large bowl = 400g, 1 glass = 250ml, 1 tbsp = 15g.
+
+For bone-in items, estimate total weight including bone.
+
+For composite dishes, estimate total grams of the entire dish as served.
+
+PORTION SIZE CALIBRATION: Photos often make portions appear larger than they are. Apply these conservative estimates:
+* Single protein serving: 80-120g (not 200-300g)
+* Single rice/grain serving: 100-150g (not 300-500g)
+* Vegetable side: 50-100g (not 200-400g)
+* Gravy/sauce: 50-100g (not 200-300g)
+* Full single-person meal: typically 250-400g total
+
+When estimating grams, start from the lower end of typical ranges unless the portion clearly appears oversized.
+
+OUTPUT
+Return ONLY raw JSON. No markdown, no explanation.
+
+{
+  "mealName": "Overall meal name",
+  "items": [
+    { "name": "Item name", "quantity": "Estimated quantity", "grams": 0, "composite": false }
+  ]
+}
+
+EXAMPLE
+
+{
+  "mealName": "Indian Thali",
+  "items": [
+    { "name": "Chicken Biryani", "quantity": "1 plate", "grams": 300, "composite": true },
+    { "name": "Dal", "quantity": "1 small bowl", "grams": 150, "composite": false },
+    { "name": "Roti", "quantity": "2 rotis", "grams": 60, "composite": false },
+    { "name": "Raita", "quantity": "0.5 small bowl", "grams": 75, "composite": false }
+  ]
+}
+
+Return only valid JSON, no additional text.`;
+
+    const parts = [{ text: enhancedPrompt }];
+    if (imageUrl) {
+      parts.push({ inlineData: { mimeType: 'image/jpeg', data: await this.fetchImageAsBase64(imageUrl) } });
+    }
+
+    const result = await model.generateContent(parts);
+    const response = await result.response;
+    const textResponse = response.text();
+    const tokens = {
+      input: result.response.usageMetadata?.promptTokenCount || null,
+      output: result.response.usageMetadata?.candidatesTokenCount || null
+    };
+
+    return { response: textResponse, tokens, provider: 'gemini', model: modelName };
+  }
+
+  /**
    * STEP 2: Given identified items with quantities, calculate nutrition / calories.
    * @param {Object} quantityResult - Parsed JSON from step 1 (mealName, items[{name, quantity, confidence}])
    */
@@ -897,7 +1067,6 @@ Return only valid JSON, no additional text.`;
    */
   static async analyzeFoodCaloriesV3(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
-      const llmModel = 'gemini-2.5-flash';
       const isTextOnly = !imageUrl && hint;
 
       console.log(`🤖 [V3] ─── Starting V3 pipeline ───`);
@@ -1002,6 +1171,84 @@ Return only valid JSON, no additional text.`;
     } catch (error) {
       console.error(`❌ [V3] Pipeline failed: ${error.message}`);
       throw new Error(`Failed to analyze food (V3): ${error.message}`);
+    }
+  }
+
+  static async analyzeFoodCaloriesV4(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
+    try {
+      console.log(`🤖 [V4] ─── Starting V4 pipeline (DB-first with per-item waterfall) ───`);
+      console.log(`🤖 [V4] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}`);
+
+      // Step 1: Enhanced Prompt 1 - Meal identification + itemType classification
+      console.log(`🤖 [V4] Step 1: Enhanced Prompt 1 (with itemType classification)`);
+      const quantityRaw = await this.analyzeQuantityWithGeminiV4(imageUrl, hint);
+      const quantityParsed = this.parseAIResult(quantityRaw.response);
+      console.log(`🤖 [V4] Step 1 complete — ${quantityParsed.items.length} items identified, mealName="${quantityParsed.mealName}"`);
+
+      quantityParsed.items.forEach((item, i) => {
+        const composite = item.composite ? 'composite' : 'single';
+        const grams = item.grams || item.quantityAlternate?.value || 'N/A';
+        console.log(`🤖 [V4]   item[${i}]: "${item.name}" | ${composite} | grams=${grams}`);
+      });
+
+      // Step 2: Per-item nutrition lookup with waterfall (USDA → IFCT → LLM cache → LLM)
+      console.log(`🤖 [V4] Step 2: Per-item waterfall lookup (USDA → IFCT → cache → LLM)`);
+      const NutritionLookupServiceV4 = require('./nutritionLookupServiceV4');
+      const nutritionResult = await NutritionLookupServiceV4.calculateNutrition(quantityParsed.items);
+
+      console.log(`🤖 [V4] Step 2 complete — ${nutritionResult.items.length} items processed`);
+      console.log(`🤖 [V4] Source breakdown: USDA=${nutritionResult.sourceBreakdown.usda}, IFCT=${nutritionResult.sourceBreakdown.ifct}, cached=${nutritionResult.sourceBreakdown.llm_cached}, fresh=${nutritionResult.sourceBreakdown.llm_fresh}, recipe=${nutritionResult.sourceBreakdown.recipe}`);
+
+      nutritionResult.items.forEach((item, i) => {
+        const source = item.nutritionSource || 'unknown';
+        const cal = item.nutrition?.calories || 0;
+        console.log(`🤖 [V4]   result[${i}]: "${item.name}" | source=${source} | cal=${cal}`);
+      });
+
+      // Save meal with enhanced tracking
+      let savedMeal = null;
+      if (userId) {
+        try {
+          const imageReference = imageUrl || (hint ? `text: ${hint}` : null);
+          console.log(`🤖 [V4] Saving meal for userId=${userId} with source tracking`);
+          savedMeal = await this.saveMealDataForV4(
+            userId,
+            imageReference,
+            {
+              mealName: quantityParsed.mealName,
+              items: nutritionResult.items,
+              totalNutrition: nutritionResult.totalNutrition
+            },
+            additionalData,
+            quantityRaw.tokens
+          );
+          console.log(`🤖 [V4] Meal saved: mealId=${savedMeal?._id}`);
+        } catch (saveErr) {
+          console.error(`⚠️ [V4] Failed to save meal (non-fatal): ${saveErr.message}`);
+          // Continue anyway - return results even if save failed
+        }
+      }
+
+      const coverage = nutritionResult.coverage;
+      console.log(`🤖 [V4] Coverage: ${coverage.fromDatabase}/${coverage.total} from DB (${Math.round(coverage.fromDatabase / coverage.total * 100)}%)`);
+      console.log(`🤖 [V4] ─── V4 pipeline complete ───`);
+
+      return {
+        calories: {
+          mealName: quantityParsed.mealName,
+          items: nutritionResult.items,
+          totalNutrition: nutritionResult.totalNutrition
+        },
+        provider,
+        mealId: savedMeal ? savedMeal._id : null,
+        quantityResult: quantityParsed,
+        sourceBreakdown: nutritionResult.sourceBreakdown,
+        coverage: nutritionResult.coverage,
+        steps: { step1_tokens: quantityRaw.tokens }
+      };
+    } catch (error) {
+      console.error(`❌ [V4] Pipeline failed: ${error.message}`);
+      throw new Error(`Failed to analyze food (V4): ${error.message}`);
     }
   }
 
@@ -1430,6 +1677,91 @@ Return only valid JSON, no additional text.`;
       console.error('Failed to save meal data (V3):', error);
       throw new Error(`Failed to save meal data (V3): ${error.message}`);
     }
+  }
+
+  static async saveMealDataForV4(userId, imageUrl, nutritionResult, additionalData = {}, tokens = { input: null, output: null }) {
+    try {
+      const mealItems = nutritionResult.items.map((item, index) => {
+        const nut = item.nutrition || {};
+        return {
+          id: `item_${Date.now()}_${index}`,
+          name: { llm: item.name, final: null },
+          quantity: {
+            llm: {
+              value: item.quantity?.value || item.servingSize || 1,
+              unit: item.quantity?.unit || item.servingUnit || 'serving'
+            },
+            final: null
+          },
+          quantityAlternate: {
+            llm: {
+              value: item.grams || item.quantityAlternate?.value || null,
+              unit: 'grams'
+            },
+            final: { value: null, unit: null }
+          },
+          nutrition: {
+            calories: { llm: nut.calories || 0, final: nut.calories || 0 },
+            protein: { llm: nut.protein || 0, final: nut.protein || 0 },
+            carbs: { llm: nut.carbs || 0, final: nut.carbs || 0 },
+            fat: { llm: nut.fat || 0, final: nut.fat || 0 }
+          },
+          confidence: item.confidence || null,
+          nutritionSource: item.nutritionSource || 'llm_fresh',
+          foodItemId: item.foodItemId || null,
+          recipeId: item.recipeId || null,
+          dataSourcePriority: this.getDataSourcePriority(item.nutritionSource),
+          grams: item.grams || null
+        };
+      });
+
+      const photos = [];
+      if (imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+        photos.push({
+          url: imageUrl,
+          width: additionalData.width || null,
+          height: additionalData.height || null
+        });
+      }
+
+      const dateUtils = require('../utils/dateUtils');
+      const mealData = {
+        userId,
+        capturedAt: additionalData.capturedAt ? new Date(additionalData.capturedAt) : dateUtils.getCurrentDateInIST(),
+        photos,
+        llmVersion: '4.0',
+        llmModel: 'gemini-2.5-flash',
+        name: nutritionResult.mealName,
+        totalNutrition: {
+          calories: { llm: nutritionResult.totalNutrition.calories, final: nutritionResult.totalNutrition.calories },
+          protein: { llm: nutritionResult.totalNutrition.protein, final: nutritionResult.totalNutrition.protein },
+          carbs: { llm: nutritionResult.totalNutrition.carbs, final: nutritionResult.totalNutrition.carbs },
+          fat: { llm: nutritionResult.totalNutrition.fat, final: nutritionResult.totalNutrition.fat }
+        },
+        items: mealItems,
+        notes: additionalData.notes || `AI Analysis (V4 DB-first): ${nutritionResult.mealName}`,
+        userApproved: false,
+        inputTokens: tokens.input,
+        outputTokens: tokens.output
+      };
+
+      const meal = new Meal(mealData);
+      return await meal.save();
+    } catch (error) {
+      console.error('Failed to save meal data (V4):', error);
+      throw new Error(`Failed to save meal data (V4): ${error.message}`);
+    }
+  }
+
+  static getDataSourcePriority(source) {
+    const priorities = {
+      'usda': 1,
+      'ifct': 2,
+      'llm_cached': 3,
+      'llm_fresh': 4,
+      'recipe': 1
+    };
+    return priorities[source] || 99;
   }
 
   static parseAIResult(aiResult) {

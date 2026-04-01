@@ -1,0 +1,66 @@
+/**
+ * testV4Image.js
+ *
+ * Tests the full V4 pipeline directly (no server needed):
+ *   Gemini vision → food identification → nutrition waterfall
+ *
+ * Usage: node Backend/scripts/testV4Image.js <imageUrl>
+ */
+
+const mongoose = require('mongoose');
+require('dotenv').config();
+const AiService = require('../services/aiService');
+
+const MONGO_URI = process.env.MONGO_URI_NEW || process.env.MONGO_URI;
+const imageUrl = process.argv[2];
+
+if (!imageUrl) {
+  console.error('Usage: node Backend/scripts/testV4Image.js <imageUrl>');
+  process.exit(1);
+}
+
+async function main() {
+  await mongoose.connect(MONGO_URI);
+  console.log('Connected to MongoDB\n');
+
+  console.log(`Image: ${imageUrl}\n`);
+
+  const start = Date.now();
+  const result = await AiService.analyzeFoodCaloriesV4(imageUrl, null, 'gemini', null, {});
+  const elapsed = Date.now() - start;
+
+  console.log('\n═══════════════════════════════════════');
+  console.log(`Meal: ${result.calories.mealName}`);
+  console.log(`Time: ${elapsed}ms`);
+  console.log('═══════════════════════════════════════\n');
+
+  // Items
+  console.log('Items:');
+  for (const item of result.calories.items) {
+    const n = item.nutrition;
+    const source = item.nutritionSource || 'unknown';
+    const match = item.matchedName ? ` → ${item.matchedName}` : '';
+    const strategy = item.strategy ? ` (${item.strategy})` : '';
+
+    if (n) {
+      console.log(`  ${item.name} (${item.grams}g) — ${n.calories} cal | ${n.protein}g P | ${n.carbs}g C | ${n.fat}g F  [${source}${match}${strategy}]`);
+    } else {
+      console.log(`  ${item.name} (${item.grams}g) — ❌ no nutrition  [${source}] ${item.error || ''}`);
+    }
+  }
+
+  // Totals
+  const t = result.calories.totalNutrition;
+  console.log(`\nTotal: ${t.calories} cal | ${t.protein}g P | ${t.carbs}g C | ${t.fat}g F`);
+
+  // Coverage
+  const c = result.coverage;
+  console.log(`\nCoverage: ${c.fromDatabase} DB + ${c.fromLLM} LLM + ${c.errors} errors / ${c.total} total (${Math.round(c.fromDatabase / c.total * 100)}% from DB)`);
+
+  // Source breakdown
+  console.log('\nSource breakdown:', JSON.stringify(result.sourceBreakdown));
+
+  await mongoose.disconnect();
+}
+
+main().catch(e => { console.error(e); process.exit(1); });

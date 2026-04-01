@@ -1,0 +1,344 @@
+[
+  {
+    "dishName": "Chicken Curry",
+    "aliases": ["Murgh Curry", "Chicken Masala Curry", "Chicken Masala"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Chicken Curry)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Butter Chicken",
+    "aliases": ["Murgh Makhani", "Chicken Makhani", "Butter Murgh"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Butter Chicken)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Chicken Korma",
+    "aliases": ["Murgh Korma", "White Chicken Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Chicken Korma)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Chicken Stew",
+    "aliases": ["Kerala Chicken Stew", "Murgh Stew"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Chicken Stew)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Creamy Chicken",
+    "aliases": ["Chicken In Cream Sauce"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Creamy Chicken)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Shahi Chicken Masala",
+    "aliases": ["Shahi Murgh", "Royal Chicken Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Shahi Chicken Masala)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Afghani Chicken",
+    "aliases": ["Afghani Murgh"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Afghani Chicken)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Tomato Chicken",
+    "aliases": ["Tamatar Murgh"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Tomato Chicken)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Paneer Curry",
+    "aliases": ["Paneer Masala"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Paneer Curry)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Matar Paneer",
+    "aliases": ["Pea And Paneer Curry", "Paneer Matar"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Matar Paneer)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Paneer Butter Masala",
+    "aliases": ["Paneer Makhani", "Butter Paneer"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Paneer Butter Masala)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Paneer Lababdar",
+    "aliases": ["Lababdar Paneer"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Paneer Lababdar)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Shahi Paneer",
+    "aliases": ["Royal Paneer"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Shahi Paneer)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Methi Malai Paneer",
+    "aliases": ["Fenugreek Paneer"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Methi Malai Paneer)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Paneer Makhana Korma",
+    "aliases": ["Paneer Korma", "Makhana Paneer"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Paneer Makhana Korma)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Palak Paneer",
+    "aliases": ["Spinach Paneer", "Saag Paneer"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Palak Paneer)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Spinach Paneer Kofta",
+    "aliases": ["Palak Paneer Kofta"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Spinach Paneer Kofta)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Veg Paneer Stew",
+    "aliases": ["Kerala Paneer Stew"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Gravy (Veg Paneer Stew)", "ratio": 0.7, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Mutton Do Piaza",
+    "aliases": ["Mutton Dopiaza", "Lamb Do Piaza"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Mutton Do Piaza)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Mutton Yakhni",
+    "aliases": ["Lamb Yakhni", "Mutton Broth Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Mutton Yakhni)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Mutton Korma",
+    "aliases": ["Lamb Korma", "Mutton White Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Mutton Korma)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Palak Mutton",
+    "aliases": ["Spinach Mutton", "Saag Mutton", "Saag Gosht"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Palak Mutton)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Keema Curry",
+    "aliases": ["Kheema Curry", "Minced Mutton Curry", "Keema Masala"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Keema Curry)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Matar Keema",
+    "aliases": ["Pea Keema Curry", "Keema Matar"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Matar Keema)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Fish Curry",
+    "aliases": ["Machli Curry", "Fish Masala", "Meen Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Fish", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Fish Curry)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Bengal Fish Curry",
+    "aliases": ["Bengali Fish Curry", "Machher Jhol"],
+    "isComposite": true,
+    "components": [
+      { "name": "Fish", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Bengal Fish Curry)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Tomato Fish",
+    "aliases": ["Tamatar Machli", "Fish Tomato Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Fish", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Tomato Fish)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Fish In Coconut Milk",
+    "aliases": ["Coconut Fish Curry", "Nariyal Fish Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Fish", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Fish In Coconut Milk)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Prawn Curry",
+    "aliases": ["Jhinga Curry", "Prawn Coconut Curry", "Chingri Curry"],
+    "isComposite": true,
+    "components": [
+      { "name": "Prawn", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Prawn Curry)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Egg Curry",
+    "aliases": ["Anda Curry", "Egg Masala", "Ande Ki Sabzi"],
+    "isComposite": true,
+    "components": [
+      { "name": "Egg", "ratio": 0.4, "category": "protein", "quantization": { "unit": 50, "method": "round" } },
+      { "name": "Gravy (Egg Curry)", "ratio": 0.6, "category": "gravy", "getRemainder": true }
+    ]
+  },
+  {
+    "dishName": "Chicken Biryani",
+    "aliases": ["Murgh Biryani", "Chicken Biriyani", "Hyderabadi Chicken Biryani"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.35, "category": "protein" },
+      { "name": "Rice (Chicken Biryani)", "ratio": 0.65, "category": "biryani_rice" }
+    ]
+  },
+  {
+    "dishName": "Mutton Biryani",
+    "aliases": ["Gosht Biryani", "Lamb Biryani", "Mutton Biriyani"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.35, "category": "protein" },
+      { "name": "Rice (Mutton Biryani)", "ratio": 0.65, "category": "biryani_rice" }
+    ]
+  },
+  {
+    "dishName": "Prawn Biryani",
+    "aliases": ["Jhinga Biryani", "Shrimp Biryani", "Prawn Biriyani"],
+    "isComposite": true,
+    "components": [
+      { "name": "Prawn", "ratio": 0.3, "category": "protein" },
+      { "name": "Rice (Prawn Biryani)", "ratio": 0.7, "category": "biryani_rice" }
+    ]
+  },
+  {
+    "dishName": "Fish Biryani",
+    "aliases": ["Machli Biryani", "Meen Biryani", "Fish Biriyani"],
+    "isComposite": true,
+    "components": [
+      { "name": "Fish", "ratio": 0.3, "category": "protein" },
+      { "name": "Rice (Fish Biryani)", "ratio": 0.7, "category": "biryani_rice" }
+    ]
+  },
+  {
+    "dishName": "Egg Biryani",
+    "aliases": ["Anda Biryani", "Egg Biriyani"],
+    "isComposite": true,
+    "components": [
+      { "name": "Egg", "ratio": 0.3, "category": "protein", "quantization": { "unit": 50, "method": "round" } },
+      { "name": "Rice (Egg Biryani)", "ratio": 0.7, "category": "biryani_rice", "getRemainder": true }
+    ]
+  },
+  {
+    "dishName": "Paneer Biryani",
+    "aliases": ["Paneer Biriyani", "Cottage Cheese Biryani"],
+    "isComposite": true,
+    "components": [
+      { "name": "Paneer", "ratio": 0.3, "category": "protein" },
+      { "name": "Rice (Paneer Biryani)", "ratio": 0.7, "category": "biryani_rice" }
+    ]
+  },
+  {
+    "dishName": "Chicken Rogan Josh",
+    "aliases": ["Chicken Roghan Josh", "Murgh Rogan Josh"],
+    "isComposite": true,
+    "components": [
+      { "name": "Chicken", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Chicken Rogan Josh)", "ratio": 0.6, "category": "gravy" }
+    ]
+  },
+  {
+    "dishName": "Mutton Rogan Josh",
+    "aliases": ["Mutton Roghan Josh", "Gosht Rogan Josh", "Rogan Josh"],
+    "isComposite": true,
+    "components": [
+      { "name": "Mutton", "ratio": 0.4, "category": "protein" },
+      { "name": "Gravy (Mutton Rogan Josh)", "ratio": 0.6, "category": "gravy" }
+    ]
+  }
+]

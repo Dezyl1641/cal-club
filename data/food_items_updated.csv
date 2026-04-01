@@ -1,0 +1,400 @@
+Category,Name,Aliases,Calories/100g,Protein/100g,Carbs/100g,Fat/100g,Fiber/100g,DataSource,Verified
+beverage,Aam panna,Aam Panna | Raw mango drink,40,0.2,10,0,0.3,MANUAL,TRUE
+beverage,Apple juice,Apple juice | Seb ka juice,46,0.1,11,0.1,0.2,MANUAL,TRUE
+beverage,Beer,Beer | Lager | Craft beer,43,0.5,3.6,0,0,MANUAL,TRUE
+beverage,Black coffee,Black coffee | Brewed Coffee | Americano | Coffee,2,0.3,0,0,0,MANUAL,TRUE
+beverage,Black tea,Black tea | Green tea | Tea without milk,1,0.2,0.2,0,0,MANUAL,TRUE
+beverage,Coconut water,Coconut Water | Nariyal pani | Tender coconut water,19,0.7,3.7,0.2,1.1,MANUAL,TRUE
+beverage,Coffee with milk,Latte | Cappuccino | Milk coffee | Filter coffee,30,1.5,3,1.2,0,MANUAL,TRUE
+beverage,Cold coffee,Iced coffee | Frappe | Cold brew | Frappe Powder,55,1,9,1.5,0,MANUAL,TRUE
+beverage,Energy drink,Red Bull | Monster | Energy drink,45,0,11,0,0,MANUAL,TRUE
+beverage,Jaljeera,Jaljeera | Jal jeera drink,15,0.3,3.5,0.1,0.2,MANUAL,TRUE
+beverage,Mango juice,Mango juice | Aam ras | Mango shake | Mango lassi,60,0.4,15,0.1,0.3,MANUAL,TRUE
+beverage,Milkshake,Milkshake | Chocolate milkshake | Vanilla milkshake,112,3,18,3.5,0,MANUAL,TRUE
+beverage,Nimbu pani,Lemonade | Nimbu pani | Lime water | Shikanji,25,0.1,6,0,0,MANUAL,TRUE
+beverage,Orange juice,Orange juice | Fresh OJ | Santra juice,45,0.7,10,0.2,0.2,MANUAL,TRUE
+beverage,Smoothie,Smoothie | Fruit smoothie | Protein smoothie,68,2,12,1.5,1,MANUAL,TRUE
+beverage,Soft drink,Cola | Pepsi | Coke | Soda | Carbonated drink,42,0,11,0,0,MANUAL,TRUE
+beverage,Sugarcane juice,Sugarcane juice | Ganne ka ras,73,0.2,18,0,0,MANUAL,TRUE
+beverage,Tea with milk,Chai | Masala chai | Tea | Doodh chai,37,1.2,5,1.2,0,MANUAL,TRUE
+beverage,Water,Water | Mineral water | Paani,0,0,0,0,0,MANUAL,TRUE
+beverage,Wine,Red wine | White wine | Wine,85,0.1,2.6,0,0,MANUAL,TRUE
+dairy,Almond milk,Almond milk | Badam milk,17,0.6,1.5,1.1,0.2,MANUAL,TRUE
+dairy,Butter,Butter | Makhan | Salted butter,717,0.9,0.1,81,0,MANUAL,TRUE
+dairy,Buttermilk,Chaas | Chhachh | Mattha | Buttermilk,25,1.5,3.5,0.5,0,MANUAL,TRUE
+dairy,Cheese,Cheese | Cheddar cheese | Processed cheese | Cheese slice,402,25,1.3,33,0,MANUAL,TRUE
+dairy,Coconut milk,Coconut milk | Nariyal doodh,197,2.3,3,21,0,MANUAL,TRUE
+dairy,Condensed milk,Condensed milk | Milkmaid,321,8,55,8,0,MANUAL,TRUE
+dairy,Cream,Fresh cream | Heavy cream | Whipping cream | Malai,340,2,3,36,0,MANUAL,TRUE
+dairy,Cream cheese,Cream cheese | Philadelphia,342,6,4,34,0,MANUAL,TRUE
+dairy,Dahi,Dahi (Plain Yogurt) | Plain yogurt | Yogurt | Curd,61,3.5,4.7,3.3,0,MANUAL,TRUE
+dairy,Flavored yogurt,Flavored yogurt | Fruit yogurt | Mishti doi,99,3.5,17,1.5,0,MANUAL,TRUE
+dairy,Ghee,Ghee | Clarified butter | Desi ghee,900,0,0,100,0,MANUAL,TRUE
+dairy,Greek yogurt,Greek Yogurt | Thick yogurt | Hung curd,97,9,3.6,5,0,MANUAL,TRUE
+dairy,Ice cream,Ice cream | Vanilla ice cream | Ice cream scoop,207,3.5,24,11,0,MANUAL,TRUE
+dairy,Khoya,Mawa | Khoya | Dried milk solid,320,12,20,22,0,MANUAL,TRUE
+dairy,Lassi,Sweet lassi | Mango lassi | Lassi,72,2.5,12,2,0,MANUAL,TRUE
+dairy,Mozzarella cheese,Mozzarella | Pizza cheese,280,28,3,17,0,MANUAL,TRUE
+dairy,Paneer tikka,Paneer Tikka | Grilled paneer,240,16,5,18,0.5,MANUAL,TRUE
+dairy,Rabri,Rabdi | Rabri,250,6,30,12,0,MANUAL,TRUE
+dairy,Shrikhand,Shrikhand | Amrakhand,220,5,35,7,0,MANUAL,TRUE
+dairy,Skimmed milk,Skim milk | Fat free milk,34,3.4,5,0.1,0,MANUAL,TRUE
+dairy,Sour cream,Sour Cream | Sour cream,193,2.4,4.6,19,0,MANUAL,TRUE
+dairy,Toned milk,Toned milk | 2% milk | Low fat milk,50,3.3,4.9,2,0,MANUAL,TRUE
+dairy,Whole milk,Whole Milk | Generic Cow's Milk (2%) | Full cream milk | Doodh,61,3.2,4.8,3.3,0,MANUAL,TRUE
+fat,Almond butter,Almond butter,614,21,19,56,10,MANUAL,TRUE
+fat,Coconut oil,Coconut oil | Nariyal tel,862,0,0,100,0,MANUAL,TRUE
+fat,Margarine,Margarine | Amul lite,717,0.2,0.7,80,0,MANUAL,TRUE
+fat,Mayonnaise,Mayo | Mayonnaise,680,1,1,75,0,MANUAL,TRUE
+fat,Mustard oil,Mustard oil | Sarson ka tel,884,0,0,100,0,MANUAL,TRUE
+fat,Nutella,Nutella (Chocolate Hazelnut Spread) | Chocolate spread | Hazelnut spread,539,6,58,31,3,MANUAL,TRUE
+fat,Olive oil,Olive oil | Extra virgin olive oil,884,0,0,100,0,MANUAL,TRUE
+fat,Peanut butter,Peanut butter | PB,588,25,20,50,6,MANUAL,TRUE
+fat,Sesame oil,Til ka tel | Gingelly oil,884,0,0,100,0,MANUAL,TRUE
+fat,Sunflower oil,Sunflower oil | Vegetable oil | Cooking oil | Refined oil,884,0,0,100,0,MANUAL,TRUE
+fruit,Amla,Indian gooseberry | Amla,44,0.9,10,0.6,4.3,MANUAL,TRUE
+fruit,Apple,Apple (Medium) | Red Apple | Seb | Green apple,52,0.3,14,0.2,2.4,MANUAL,TRUE
+fruit,Apricot,Apricot | Khubani | Fresh apricot,48,1.4,11,0.4,2,MANUAL,TRUE
+fruit,Banana,Banana | Kela | Yellow banana,89,1.1,23,0.3,2.6,MANUAL,TRUE
+fruit,Ber,Indian jujube | Ber fruit,79,1.2,20,0.2,2,MANUAL,TRUE
+fruit,Blueberry,Blueberry | Blueberries,57,0.7,14,0.3,2.4,MANUAL,TRUE
+fruit,Chikoo,Sapota | Chiku | Sapodilla,83,0.4,20,1.1,5.3,MANUAL,TRUE
+fruit,"Coconut, fresh",Coconut | Nariyal | Fresh coconut | Coconut meat,354,3.3,15,33,9,MANUAL,TRUE
+fruit,Custard apple,Sitaphal | Sharifa | Sugar apple,94,2.1,24,0.3,4.4,MANUAL,TRUE
+fruit,Dates,Dates | Khajoor | Medjool dates,277,1.8,75,0.2,7,MANUAL,TRUE
+fruit,Dragon fruit,Pitaya | Dragon fruit,60,1.2,13,0.4,3,MANUAL,TRUE
+fruit,Dried apricot,Dried apricot | Sukhi khubani,241,3.4,63,0.5,7,MANUAL,TRUE
+fruit,Dried cranberries,Cranberries | Dried cranberries,308,0.1,83,1.4,5.7,MANUAL,TRUE
+fruit,Dried figs,Dried figs | Anjeer,249,3.3,64,0.9,10,MANUAL,TRUE
+fruit,Fruit salad,Mixed fruits | Fruit salad | Cut fruits,50,0.5,13,0.2,1.5,MANUAL,TRUE
+fruit,Grapes,Grapes | Angoor | Green grapes | Black grapes,69,0.7,18,0.2,0.9,MANUAL,TRUE
+fruit,Guava,Guava | Amrud,68,2.6,14,1,5.4,MANUAL,TRUE
+fruit,"Jackfruit, ripe",Jackfruit | Kathal fruit | Ripe jackfruit,95,1.7,23,0.6,1.5,MANUAL,TRUE
+fruit,Jamun,Jamun | Java plum | Black plum,60,0.7,16,0.2,0.6,MANUAL,TRUE
+fruit,Kiwi,Kiwi | Kiwi fruit,61,1.1,15,0.5,3,MANUAL,TRUE
+fruit,Lime,Lime | Lime wedge | Nimbu | Lemon,30,0.7,10,0.2,2.8,MANUAL,TRUE
+fruit,Litchi,Litchi | Lychee | Lichi,66,0.8,17,0.4,1.3,MANUAL,TRUE
+fruit,Mango,Mango | Aam | Ripe mango,60,0.8,15,0.4,1.6,MANUAL,TRUE
+fruit,Muskmelon,Muskmelon | Kharbooja | Cantaloupe,34,0.8,8,0.2,0.9,MANUAL,TRUE
+fruit,Orange,Orange | Santra | Narangi,47,0.9,12,0.1,2.4,MANUAL,TRUE
+fruit,Papaya,Papaya | Papita,43,0.5,11,0.3,1.7,MANUAL,TRUE
+fruit,Passion fruit,Passion fruit | Krishna phal,97,2.2,23,0.7,10,MANUAL,TRUE
+fruit,Peach,Peach | Aadu,39,0.9,10,0.3,1.5,MANUAL,TRUE
+fruit,Pear,Pear | Nashpati,57,0.4,15,0.1,3.1,MANUAL,TRUE
+fruit,Pineapple,Pineapple | Ananas,50,0.5,13,0.1,1.4,MANUAL,TRUE
+fruit,Plum,Plum | Aloo bukhara,46,0.7,11,0.3,1.4,MANUAL,TRUE
+fruit,Pomegranate,Pomegranate | Pomegranate seeds | Pomegranate arils | Anar,83,1.7,19,1.2,4,MANUAL,TRUE
+fruit,Prunes,Prunes | Dried plum | Aloo bukhara dry,240,2.2,64,0.4,7,MANUAL,TRUE
+fruit,Raisins,Raisins | Kishmish | Dried grapes,299,3.1,79,0.5,3.7,MANUAL,TRUE
+fruit,Strawberry,Strawberry | Strawberries,32,0.7,8,0.3,2,MANUAL,TRUE
+fruit,Watermelon,Watermelon | Tarbooz,30,0.6,8,0.2,0.4,MANUAL,TRUE
+grain,Aloo paratha,Aloo Paratha | Potato paratha | Stuffed paratha,240,5,33,10,2,MANUAL,TRUE
+grain,Appam,Appam | Hoppers,120,2.5,22,2.5,0.5,MANUAL,TRUE
+grain,Bajra roti,Bajra Roti | Pearl millet roti | Bajra,295,10,48,7,5,MANUAL,TRUE
+grain,"Basmati rice, cooked",Basmati rice | Basmati chawal,121,3.5,25,0.4,0.4,MANUAL,TRUE
+grain,Bhatura,Bhature | Chole bhature bread,340,7,42,16,1.5,MANUAL,TRUE
+grain,Cooked brown rice,Brown rice | Brown chawal,123,2.6,26,1,1.8,MANUAL,TRUE
+grain,Cooked white rice,Steamed White Rice | Steamed white rice | Chawal (Cooked White Rice) | Chawal | White rice | Plain rice,130,2.7,28,0.3,0.4,MANUAL,TRUE
+grain,Corn tortilla,Corn Tortilla | Taco shell,218,6,44,3,6,MANUAL,TRUE
+grain,Cornflakes,Cornflakes | Corn flakes | Cereal,357,7,84,0.4,1,MANUAL,TRUE
+grain,Curd rice,Curd Rice | Dahi chawal | Thayir sadam,110,3,18,3,0.3,MANUAL,TRUE
+grain,Dalia,Dalia | Broken wheat | Lapsi,115,4,21,1.5,3,MANUAL,TRUE
+grain,Dosa,Plain dosa | Sada dosa,168,4,27,5,1,MANUAL,TRUE
+grain,Garlic naan,Garlic Naan | Lehsun naan,320,9,48,10,2,MANUAL,TRUE
+grain,Gobi paratha,Gobi Paratha | Cauliflower paratha,230,5,32,9,2.5,MANUAL,TRUE
+grain,Idli,Idli | Steamed idli | Rice cake,130,4,24,1.5,1,MANUAL,TRUE
+grain,Jeera rice,Jeera Rice | Cumin rice,142,2.8,26,3,0.5,MANUAL,TRUE
+grain,Jowar roti,Jowar Roti | Sorghum roti | Jolada roti,290,8,52,5,5,MANUAL,TRUE
+grain,Kulcha,Amritsari kulcha | Stuffed kulcha,300,8,46,9,2,MANUAL,TRUE
+grain,Lemon rice,Lemon Rice | Nimbu chawal | Chitranna,148,2.5,27,3.5,0.5,MANUAL,TRUE
+grain,Maggi noodles,Instant noodles | Maggi | 2-minute noodles,148,3.5,23,5,1,MANUAL,TRUE
+grain,Makki ki roti,Makki Roti | Corn roti | Maize roti,280,6,50,6,4,MANUAL,TRUE
+grain,Masala dosa,Masala Dosa | Stuffed dosa,175,4,25,7,1.5,MANUAL,TRUE
+grain,Missi roti,Missi Roti | Besan roti,280,10,40,8,4,MANUAL,TRUE
+grain,Muesli,Muesli | Granola,369,10,63,8,7,MANUAL,TRUE
+grain,Multigrain bread,Multigrain Bread | Multi-seed bread,255,13,43,4,7,MANUAL,TRUE
+grain,Naan,Naan bread | Tandoori naan | Butter naan,310,9,50,8,2,MANUAL,TRUE
+grain,"Noodles, cooked",Noodles | Hakka noodles | Chow mein,138,4.5,25,2,1,MANUAL,TRUE
+grain,"Oats, cooked",Oats | Oatmeal | Porridge,71,2.5,12,1.5,1.7,MANUAL,TRUE
+grain,Paneer paratha,Paneer Paratha | Stuffed paneer paratha,260,8,30,12,2,MANUAL,TRUE
+grain,"Pasta, cooked",Penne Pasta | Spaghetti | Macaroni | Fusilli | Cooked pasta,131,5,25,1.1,1.8,MANUAL,TRUE
+grain,Pav,Pav bread | Dinner roll | Ladi pav,282,8,50,5,2,MANUAL,TRUE
+grain,Pesarattu,Pesarattu | Moong dal dosa,145,7,20,4,3,MANUAL,TRUE
+grain,Poha,Poha | Flattened rice | Chiwda | Aval,160,3,30,3,1,MANUAL,TRUE
+grain,Puri,Poori | Deep fried puri,350,7,45,16,2,MANUAL,TRUE
+grain,Puttu,Puttu | Rice puttu,210,4,40,4,1,MANUAL,TRUE
+grain,"Quinoa, cooked",Quinoa | Cooked quinoa,120,4.4,21,1.9,2.8,MANUAL,TRUE
+grain,Ragi roti,Ragi Roti | Finger millet roti | Nachni roti,290,7,52,5,6,MANUAL,TRUE
+grain,Roti,Whole Wheat Roti | Chapati | Phulka | Roti,297,9,50,7,4,MANUAL,TRUE
+grain,Rumali roti,Rumali Roti | Roomali roti,250,7,45,4,2,MANUAL,TRUE
+grain,Sabudana,Sabudana | Tapioca pearls | Sago,350,0.2,86,0.2,0.5,MANUAL,TRUE
+grain,Sabudana khichdi,Sabudana Khichdi | Sabudana (Sabudana Khichdi) | Sago khichdi,180,3,30,6,1,MANUAL,TRUE
+grain,Sourdough bread,Sourdough bread | Sourdough,274,11,50,3,3,MANUAL,TRUE
+grain,Thepla,Thepla | Methi thepla | Gujarati thepla,310,8,42,12,3,MANUAL,TRUE
+grain,Toast,Toast | Toasted bread | Bread toast,313,11,55,5,3,MANUAL,TRUE
+grain,Tortilla,Flour tortilla | Wrap | Burrito wrap,312,8,52,8,3,MANUAL,TRUE
+grain,Upma,Upma | Rava upma | Suji upma,140,3,22,4.5,1,MANUAL,TRUE
+grain,Uttapam,Uttapam | Uthappam,150,4,25,4,1.5,MANUAL,TRUE
+grain,Vegetable pulao,Vegetable Pulao | Pulao | Veg pulao,145,3,24,4,1,MANUAL,TRUE
+grain,Wheat paratha,Wheat Paratha | Paratha | Plain paratha,326,8,45,13,3,MANUAL,TRUE
+grain,White bread,White Bread Toast | Bread | Sandwich bread,265,9,49,3,2.7,MANUAL,TRUE
+grain,Whole wheat bread,Whole Wheat Bread | Atta Bread Toast | Brown bread | Whole grain bread,247,13,41,3.4,7,MANUAL,TRUE
+legumes,Baked beans,Baked beans | Beans in tomato sauce,94,5,16,0.5,4,MANUAL,TRUE
+legumes,"Black beans, cooked",Black Beans | Black beans | Kale chane,132,9,24,0.5,8,MANUAL,TRUE
+legumes,"Chana dal, cooked",Chana dal | Split chickpea,125,8,19,2,5,MANUAL,TRUE
+legumes,"Chickpeas, boiled",Boiled chickpeas | Safed chana | Garbanzo beans,164,9,27,2.6,8,MANUAL,TRUE
+legumes,Chole,Chole | Chickpea curry | Chana | Kabuli chana,130,7,20,3,5,MANUAL,TRUE
+legumes,Dal,Dal | Daal | Dal (Lentil Curry) | Mixed dal | Dal fry,110,7,16,2,4,MANUAL,TRUE
+legumes,Dal makhani,Dal Makhani | Creamy black dal | Maa ki dal rich,130,6,14,6,4,MANUAL,TRUE
+legumes,Falafel,Falafel | Chickpea fritter,333,13,32,18,5,MANUAL,TRUE
+legumes,"Horse gram, cooked",Kulthi dal | Horse gram,130,10,20,1,5,MANUAL,TRUE
+legumes,Hummus,Hummus | Chickpea dip,166,8,14,10,6,MANUAL,TRUE
+legumes,"Lobia, cooked",Lobia | Black-eyed peas | Cowpeas,116,8,21,0.5,7,MANUAL,TRUE
+legumes,"Masoor dal, cooked",Masoor dal | Red lentils | Lentil soup,116,9,20,0.4,8,MANUAL,TRUE
+legumes,"Moong dal, cooked",Moong dal | Yellow moong dal | Green gram dal,105,7,17,0.5,5,MANUAL,TRUE
+legumes,"Moth dal, cooked",Moth dal | Matki | Turkish gram,105,7,18,0.5,5,MANUAL,TRUE
+legumes,Peanut chikki,Chikki | Peanut brittle | Gur chikki,450,15,50,22,3,MANUAL,TRUE
+legumes,"Rajma, cooked",Rajma | Kidney beans | Red beans,127,9,22,0.5,6,MANUAL,TRUE
+legumes,Sattu,Sattu | Roasted gram flour | Sattu drink,350,20,55,5,8,MANUAL,TRUE
+legumes,"Soybean, cooked",Soybean | Soya chunks cooked | Soy nuggets | Meal maker,173,17,10,9,6,MANUAL,TRUE
+legumes,Sprouts,Moong sprouts | Sprouts salad | Bean sprouts | Ankurit moong,31,3,6,0.2,2,MANUAL,TRUE
+legumes,"Toor dal, cooked",Toor Dal | Toor Dal (Pigeon Pea Lentil Soup) | Toor Dal (cooked) | Arhar dal | Pigeon pea,118,7,18,1.5,5,MANUAL,TRUE
+legumes,"Urad dal, cooked",Urad dal | Black gram dal | Maa ki dal,120,8,18,1.5,5,MANUAL,TRUE
+nuts,Almonds,Almond | Badam | Soaked almonds,579,21,22,50,12,MANUAL,TRUE
+nuts,Cashews,Cashew | Kaju,553,18,30,44,3,MANUAL,TRUE
+nuts,Chia seeds,Chia Seeds | Chia,486,17,42,31,34,MANUAL,TRUE
+nuts,"Coconut, dried",Desiccated coconut | Copra | Dry coconut | Khopra,650,7,24,65,16,MANUAL,TRUE
+nuts,Flax seeds,Flaxseed | Alsi,534,18,29,42,27,MANUAL,TRUE
+nuts,Fox nuts,Makhana | Foxnuts | Lotus seeds,347,10,65,1.5,7,MANUAL,TRUE
+nuts,Mixed dry fruits,Mixed Dry Fruits | Trail mix | Dry fruit mix | Meva,520,15,35,38,6,MANUAL,TRUE
+nuts,Peanuts,Peanuts | Moongfali | Groundnut | Roasted peanuts,567,26,16,49,9,MANUAL,TRUE
+nuts,Pistachios,Pistachio | Pista,560,20,28,45,10,MANUAL,TRUE
+nuts,Pumpkin seeds,Pumpkin seeds | Kaddu beej,559,30,11,49,6,MANUAL,TRUE
+nuts,Sesame seeds,Til | Sesame | White sesame,573,18,23,50,12,MANUAL,TRUE
+nuts,Sunflower seeds,Sunflower seeds | Surajmukhi beej,584,21,20,51,9,MANUAL,TRUE
+nuts,Walnuts,Walnut | Akhrot,654,15,14,65,7,MANUAL,TRUE
+other,Aloo tikki chaat,Aloo Tikki Chaat | Tikki chaat,180,4,25,7,2,MANUAL,TRUE
+other,Banana chips,Banana chips | Kela chips | Plantain chips,519,2,58,33,4,MANUAL,TRUE
+other,Barfi,Barfi | Burfi | Kaju barfi | Kaju katli,400,8,50,19,1,MANUAL,TRUE
+other,Besan chilla,Besan chilla | Gram flour pancake | Chilla,175,8,18,8,3,MANUAL,TRUE
+other,Bhel puri,Bhel Puri | Bhel | Chaat,180,4,28,6,2,MANUAL,TRUE
+other,Biryani rice,Biryani rice | Rice (chicken biryani) | Biryani,155,3.5,26,4.5,0.5,MANUAL,TRUE
+other,Bread pakora,Bread Pakora | Bread bajji,270,6,30,14,1.5,MANUAL,TRUE
+other,Brownie,Brownie | Chocolate brownie,405,5,50,21,2,MANUAL,TRUE
+other,Burger patty,Burger | Chicken burger | Veg burger patty,250,14,12,17,1,MANUAL,TRUE
+other,Cake,Sponge Cake | Cake | Chocolate cake | Pastry,350,5,50,15,1,MANUAL,TRUE
+other,Chivda,Poha chivda | Cornflakes chivda | Dry snack mix,420,7,52,20,3,MANUAL,TRUE
+other,Chole Sabji,Chole | Chana Sabji,260,7,32,12,3,MANUAL,TRUE
+other,Cilantro lime rice,Cilantro Lime Rice | Mexican rice | Lime rice,145,2.5,27,3,0.5,MANUAL,TRUE
+other,Coconut cream,Coconut cream | Thick coconut milk,330,3,7,34,0,MANUAL,TRUE
+other,Cookie,Cookie | Biscuit | Chocolate chip cookie,480,6,62,24,2,MANUAL,TRUE
+other,Corn on the cob,Bhutta | Roasted corn | Grilled corn,96,3.4,21,1.5,2.4,MANUAL,TRUE
+other,Cream biscuit,Oreo | Cream biscuit | Bourbon,480,5,67,22,2,MANUAL,TRUE
+other,Cutlet,Veg cutlet | Aloo tikki | Potato cutlet | Tikki,200,4,24,10,2,MANUAL,TRUE
+other,Dark chocolate,Dark chocolate | Chocolate,546,5,60,31,7,MANUAL,TRUE
+other,Dhokla,Dhokla | Khaman dhokla,155,6,24,4,2,MANUAL,TRUE
+other,Donut,Doughnut | Donut,421,5,49,23,1,MANUAL,TRUE
+other,Dosa batter fried,Rava dosa | Crispy dosa | Ghee roast dosa,190,4,26,8,1,MANUAL,TRUE
+other,Falooda,Falooda | Kulfi falooda,130,3,22,3.5,0.5,MANUAL,TRUE
+other,French fries,French fries | Fries | Finger chips,312,3,41,15,3,MANUAL,TRUE
+other,Fried momos,Fried momos | Crispy momos,230,7,24,12,1,MANUAL,TRUE
+other,Fried rice,Veg fried rice | Egg fried rice | Chinese fried rice,163,4,25,5.5,1,MANUAL,TRUE
+other,Garlic bread,Garlic bread | Cheesy garlic bread,350,8,40,17,2,MANUAL,TRUE
+other,Gujiya,Gujiya | Karanji,380,5,48,19,1.5,MANUAL,TRUE
+other,Gulab jamun,Gulab Jamun | Gulab jamun,325,4,50,12,0.5,MANUAL,TRUE
+other,Halwa,Halwa | Suji halwa | Gajar halwa | Pumpkin halwa | Moong dal halwa,280,3,38,13,1,MANUAL,TRUE
+other,Honey,Honey | Shahad,304,0.3,82,0,0,MANUAL,TRUE
+other,Instant ramen,Cup noodles | Instant ramen | Top ramen,160,4,24,6,1,MANUAL,TRUE
+other,Jaggery,Gur | Jaggery | Gud,383,0.4,98,0.1,0,MANUAL,TRUE
+other,Jalebi,Jalebi | Imarti,380,3,60,15,0.5,MANUAL,TRUE
+other,Kachori,Kachori | Moong dal kachori,340,6,38,18,2,MANUAL,TRUE
+other,Khandvi,Khandvi,150,7,18,6,1,MANUAL,TRUE
+other,Kheer,Kheer (Rice Pudding) | Rice kheer | Payasam | Phirni,130,3,20,4,0.3,MANUAL,TRUE
+other,Khichdi,Khichdi | Dal khichdi | Moong dal khichdi,120,4,20,2.5,2,MANUAL,TRUE
+other,Kulfi,Kulfi | Malai kulfi | Pista kulfi,200,4,22,11,0,MANUAL,TRUE
+other,Ladoo,Laddu | Besan ladoo | Motichoor ladoo | Boondi ladoo,420,7,52,21,2,MANUAL,TRUE
+other,Lettuce & mixed veggies,Lettuce & Veggies | Greens & Vegetables | Mixed greens | Salad greens,18,1.2,3,0.2,1.5,MANUAL,TRUE
+other,Maple syrup,Maple syrup,260,0,67,0.1,0,MANUAL,TRUE
+other,Mathri,Mathri | Namak pare | Salty snack,460,7,48,26,2,MANUAL,TRUE
+other,Milk chocolate,Milk chocolate | Cadbury | Chocolate bar,535,8,59,30,3,MANUAL,TRUE
+other,Momos,Momos | Steamed momos | Dim sum | Dumplings,160,7,22,5,1,MANUAL,TRUE
+other,Muesli bar,Granola bar | Oat bar | Cereal bar,410,7,60,16,4,MANUAL,TRUE
+other,Murukku,Murukku | Chakli | Rice snack,470,8,55,24,3,MANUAL,TRUE
+other,Nachos,Nachos | Nachos with cheese,350,6,40,18,3,MANUAL,TRUE
+other,Namkeen,Sev | Mixture | Bhujia | Namkeen,500,12,45,30,4,MANUAL,TRUE
+other,Paani puri,Paani Puri | Gol gappa | Puchka | Pani puri,150,3,24,5,1,MANUAL,TRUE
+other,Pakora,Pakoda | Bhajia | Onion pakora | Fritter,240,5,22,15,2,MANUAL,TRUE
+other,Pancake,Pancake | Pancakes | Hotcakes,227,6,28,10,1,MANUAL,TRUE
+other,Papad,Papad | Papadum | Appalam,340,18,47,8,5,MANUAL,TRUE
+other,Pav bhaji,Bhaji | Pav bhaji masala | Mixed veg bhaji,110,3,14,5,3,MANUAL,TRUE
+other,Peda,Peda | Mathura peda,390,8,52,17,0,MANUAL,TRUE
+other,Pizza,Pizza slice | Cheese pizza | Margherita pizza,266,11,33,10,2,MANUAL,TRUE
+other,Popcorn,Popcorn | Butter popcorn,375,11,74,5,15,MANUAL,TRUE
+other,Potato chips,Potato chips | Savory crisps | Lays | Chips | Aloo chips | Tortilla chips,536,7,53,35,4,MANUAL,TRUE
+other,Rasgulla,Rasgulla | Rosogolla,186,5,36,2.5,0,MANUAL,TRUE
+other,Rasmalai,Rasmalai | Ras malai,195,6,28,7,0,MANUAL,TRUE
+other,Rusk,Rusk | Toast rusk | Suji rusk,400,10,70,9,2,MANUAL,TRUE
+other,Samosa,Samosa | Veg samosa | Aloo samosa,262,4,28,15,2,MANUAL,TRUE
+other,Sandesh,Sandesh | Bengali sweet,280,8,40,10,0,MANUAL,TRUE
+other,Sandwich,Sandwich | Veg sandwich | Club sandwich,250,10,30,10,2,MANUAL,TRUE
+other,Shawarma,Shawarma | Chicken shawarma,190,14,15,9,1,MANUAL,TRUE
+other,Spring roll,Fried Spring Roll (Vegetable/Mixed) | Spring roll | Veg spring roll,230,5,24,13,2,MANUAL,TRUE
+other,Sugar,Sugar | White sugar | Cheeni,387,0,100,0,0,MANUAL,TRUE
+other,Sushi rice,Sushi | Sushi roll | Maki,143,3,31,0.5,0.5,MANUAL,TRUE
+other,Tacos,Taco | Chicken taco | Veg taco,226,10,20,12,2,MANUAL,TRUE
+other,Vada,Medu vada | Vada | Dal vada,230,7,25,12,3,MANUAL,TRUE
+other,Vada pav,Vada Pav | Batata vada in pav,260,5,35,11,2,MANUAL,TRUE
+other,Waffle,Waffle | Belgian waffle,312,8,33,17,1,MANUAL,TRUE
+protein,Bacon,Bacon strips | Turkey bacon,417,13,1,40,0,MANUAL,TRUE
+protein,"Beef, cooked",Beef | Steak | Beef steak,250,26,0,16,0,MANUAL,TRUE
+protein,Boiled egg,Boiled eggs | Hard-boiled egg | Hard-boiled eggs | Anda | Egg,155,13,1,11,0,MANUAL,TRUE
+protein,"Chicken breast, cooked",Grilled Chicken Breast | Chicken breast | Boneless chicken,165,31,0,3.6,0,MANUAL,TRUE
+protein,"Chicken drumstick, cooked",Drumstick | Chicken drumstick,172,28,0,6,0,MANUAL,TRUE
+protein,Chicken keema,Minced chicken | Ground chicken | Chicken keema,143,21,0,6,0,MANUAL,TRUE
+protein,Chicken liver,Liver | Kaleji,167,25,1,7,0,MANUAL,TRUE
+protein,Chicken nuggets,Nuggets | Chicken nuggets,296,15,18,18,1,MANUAL,TRUE
+protein,Chicken sausage,Sausage | Chicken frank,216,14,2,17,0,MANUAL,TRUE
+protein,"Chicken thigh, cooked",Chicken thigh | Chicken leg,209,26,0,11,0,MANUAL,TRUE
+protein,Chicken tikka,Tikka | Chicken Tikka | Tandoori chicken tikka,148,25,2,5,0,MANUAL,TRUE
+protein,"Chicken wings, cooked",Chicken wings | Wings,203,30,0,8,0,MANUAL,TRUE
+protein,Cooked chicken,Chicken | Chicken piece | Cooked chicken,190,27,0,9,0,MANUAL,TRUE
+protein,Egg bhurji,Egg Bhurji | Indian scrambled eggs | Anda bhurji,170,11,3,13,0.5,MANUAL,TRUE
+protein,Egg white,Egg whites | Boiled egg white,52,11,1,0.2,0,MANUAL,TRUE
+protein,"Fish fillet, cooked",Fish | Fish fillet | Fried Fish Fillet | Grilled fish,136,22,0,5,0,MANUAL,TRUE
+protein,Fish fingers,Fish sticks | Fish fingers,220,12,19,11,1,MANUAL,TRUE
+protein,Fried chicken,Fried Chicken | Crispy chicken | Deep fried chicken,246,19,10,15,0,MANUAL,TRUE
+protein,Fried egg,Fried Egg | Fried eggs | Sunny side up,196,14,1,15,0,MANUAL,TRUE
+protein,Fried fish,Fried Fish | Fish fry | Tali hui machhi,197,17,8,11,0,MANUAL,TRUE
+protein,"Lamb chops, cooked",Lamb chops | Chaap,282,26,0,19,0,MANUAL,TRUE
+protein,Mutton keema,Minced mutton | Keema | Ground mutton,250,24,1,16,0,MANUAL,TRUE
+protein,"Mutton, cooked",Mutton | Goat meat | Bakra | Lamb,258,25,0,17,0,MANUAL,TRUE
+protein,Omelette,Omelette (2 eggs) | Omelet | Egg omelette,154,11,1,12,0,MANUAL,TRUE
+protein,Paneer,Cottage cheese | Indian cottage cheese,265,18,2,21,0,MANUAL,TRUE
+protein,Plant protein powder,Generic Plant Protein Powder | Plant-based protein shake (chocolate flavor) | Vegan protein,370,70,15,5,3,MANUAL,TRUE
+protein,"Pomfret, cooked",Pomfret | Paplet,120,21,0,4,0,MANUAL,TRUE
+protein,"Prawns, cooked",Prawns | Shrimp | Jhinga | Prawn,99,24,0,0.3,0,MANUAL,TRUE
+protein,"Rohu, cooked",Rohu | Rohu fish | Rui,97,17,0,3,0,MANUAL,TRUE
+protein,Salami,Salami slices,378,22,2,31,0,MANUAL,TRUE
+protein,"Salmon, cooked",Salmon | Grilled salmon,208,20,0,13,0,MANUAL,TRUE
+protein,Scrambled egg,Scrambled eggs | Bhurji,149,10,2,11,0,MANUAL,TRUE
+protein,Seekh kebab,Seekh Kebab | Kebab,206,18,4,13,0.5,MANUAL,TRUE
+protein,Shami kebab,Shami Kebab,220,15,8,14,1,MANUAL,TRUE
+protein,Surimi,Crab stick | Imitation crab,95,7,15,0.5,0,MANUAL,TRUE
+protein,Tandoori chicken,Tandoori Chicken | Tandoori murgh,150,24,3,5,0,MANUAL,TRUE
+protein,Tofu,Soy paneer | Bean curd,76,8,2,4.8,0.3,MANUAL,TRUE
+protein,Tuna,Tuna | Canned tuna,130,29,0,1,0,MANUAL,TRUE
+protein,Whey protein powder,Whey Protein Powder | Whey Protein (Generic) | Generic Whey Protein Powder | Protein powder,400,75,12,6,0,MANUAL,TRUE
+sauce,Pesto sauce,Pesto | Basil pesto,280,5,3,27,2,MANUAL,TRUE
+sauce,Pickle (Indian),Mixed Pickle | Achaar | Mango pickle | Lime pickle,175,2,8,15,2,MANUAL,TRUE
+sauce,Raita,Raita | Cucumber raita | Boondi raita,55,2.5,5,3,0.3,MANUAL,TRUE
+sauce,Ranch dressing,Ranch | Ranch dressing | Creamy dressing | Creamy Dressing,450,1,7,47,0,MANUAL,TRUE
+sauce,Rasam,Rasam | Tomato rasam | Pepper rasam,25,1,4,0.5,0.5,MANUAL,TRUE
+sauce,Sambar,Sambar | Sambhar | South Indian sambar,45,2.5,7,1,2,MANUAL,TRUE
+sauce,Schezwan sauce,Schezwan chutney | Szechuan sauce,95,1.5,12,5,1,MANUAL,TRUE
+sauce,Sesame gravy,Til gravy | Til ki chutney gravy,130,4,7,10,2,MANUAL,TRUE
+sauce,Soy sauce,Soy sauce | Soya sauce,53,8,5,0,0.5,MANUAL,TRUE
+sauce,Strawberry compote,strawberry compote | Berry compote | Fruit compote,120,0.5,30,0.1,1.5,MANUAL,TRUE
+sauce,Tamarind chutney,Tamarind Chutney | Imli chutney | Sweet chutney | Meethi chutney,130,1,32,0.3,1.5,MANUAL,TRUE
+sauce,Teriyaki sauce,Teriyaki | Teriyaki glaze,89,6,16,0,0,MANUAL,TRUE
+sauce,Tomato chutney,Tomato Chutney | Tamatar chutney,60,1,10,2,1,MANUAL,TRUE
+sauce,Tomato ketchup,Tomato Ketchup | Ketchup | Ketchup/Chili sauce,112,1,26,0.1,0.3,MANUAL,TRUE
+sauce,Tomato pasta sauce,Marinara sauce | Red sauce | Pasta sauce | Creamy Tomato Sauce,55,1.5,8,2,1.5,MANUAL,TRUE
+sauce,Vinaigrette,Vinaigrette | Balsamic vinaigrette | Oil dressing,230,0.3,8,22,0,MANUAL,TRUE
+sauce,White sauce,Bechamel | White sauce | Cream sauce,110,3,7,8,0,MANUAL,TRUE
+vegetable,Aloo gobi sabzi,Aloo Gobi Sabzi (Potato & Cauliflower Stir-fry) | Aloo gobi | Potato cauliflower,95,2,12,4.5,2,MANUAL,TRUE
+vegetable,Aloo ki sabzi,Aloo ki Sabji (Spiced Potato Stir-fry) | Aloo sabzi | Potato sabzi | Jeera aloo,110,2,16,5,2,MANUAL,TRUE
+vegetable,Aloo matar,Aloo Matar | Potato peas curry,100,3,14,4,2.5,MANUAL,TRUE
+vegetable,Aloo shimla mirch sabzi,Aloo Shimlamirch Sabzi | Potato capsicum sabzi | Aloo shimla mirch,90,2,13,3.5,2,MANUAL,TRUE
+vegetable,Arbi,Arbi | Taro root | Colocasia,112,1.5,27,0.2,4.1,MANUAL,TRUE
+vegetable,Avocado,Avocado | Butter fruit,160,2,9,15,7,MANUAL,TRUE
+vegetable,Baingan bharta,Baingan Bharta | Smoked eggplant,80,2,8,4.5,3,MANUAL,TRUE
+vegetable,Beetroot,Beetroot | Beet | Chukandar,43,1.6,10,0.2,2.8,MANUAL,TRUE
+vegetable,Bhindi sabzi,Bindi Sabzi | Bhindi fry | Okra sabzi,85,2,8,5,3,MANUAL,TRUE
+vegetable,Bitter gourd,Karela | Bitter melon,17,1,3.7,0.2,2.8,MANUAL,TRUE
+vegetable,Bottle gourd,Lauki | Doodhi | Ghia,14,0.6,3.4,0.02,0.5,MANUAL,TRUE
+vegetable,Broccoli,Broccoli | Hari gobi,34,2.8,7,0.4,2.6,MANUAL,TRUE
+vegetable,Cabbage,Cabbage | Patta gobi | Band gobi,25,1.3,6,0.1,2.5,MANUAL,TRUE
+vegetable,Capsicum,Capsicum | Bell pepper | Shimla mirch | Green pepper,20,0.9,4.6,0.2,1.7,MANUAL,TRUE
+vegetable,Carrot,Carrot | Gajar | Carrots,41,0.9,10,0.2,2.8,MANUAL,TRUE
+vegetable,Cauliflower,Cauliflower | Gobi | Phool gobi,25,1.9,5,0.3,2,MANUAL,TRUE
+vegetable,Coleslaw,Coleslaw | Cabbage slaw,99,1,9,7,1.5,MANUAL,TRUE
+vegetable,Corn,Sweet corn | Makai | Bhutta,86,3.3,19,1.4,2.7,MANUAL,TRUE
+vegetable,Cucumber,Cucumber | Kheera | Kakdi,15,0.7,3.6,0.1,0.5,MANUAL,TRUE
+vegetable,Drumstick vegetable,Drumstick | Sahjan | Moringa,37,2.1,8,0.2,3.2,MANUAL,TRUE
+vegetable,Eggplant,Baingan | Brinjal | Aubergine | Eggplant,25,1,6,0.2,3,MANUAL,TRUE
+vegetable,French beans,Green beans | French beans | String beans,31,1.8,7,0.1,2.7,MANUAL,TRUE
+vegetable,Garlic,Garlic | Lehsun,149,6.4,33,0.5,2.1,MANUAL,TRUE
+vegetable,Ginger,Ginger | Adrak,80,1.8,18,0.8,2,MANUAL,TRUE
+vegetable,Gobhi matar,Gobi Matar | Cauliflower peas,75,3,9,3,2.5,MANUAL,TRUE
+vegetable,Green chili,Green chilli | Hari mirch,40,1.9,9,0.4,1.5,MANUAL,TRUE
+vegetable,Green peas,Peas | Matar | Green peas,81,5.4,14,0.4,5.1,MANUAL,TRUE
+vegetable,"Jackfruit, raw",Kathal | Raw jackfruit | Jackfruit vegetable,95,1.7,23,0.6,1.5,MANUAL,TRUE
+vegetable,Karela sabzi,Karela sabzi | Bitter gourd fry | Stuffed karela,75,2,6,5,3,MANUAL,TRUE
+vegetable,Lauki ki sabzi,Lauki sabzi | Bottle gourd curry,50,1.5,6,2.5,1,MANUAL,TRUE
+vegetable,Lettuce,Lettuce | Salad leaves | Iceberg lettuce,14,0.9,2.9,0.1,1.2,MANUAL,TRUE
+vegetable,Lotus stem,Kamal kakdi | Lotus root,74,2.6,17,0.1,4.9,MANUAL,TRUE
+vegetable,Methi leaves,Fenugreek leaves | Methi | Methi saag,49,4.4,6,0.9,4,MANUAL,TRUE
+vegetable,Mixed green salad,"Mixed green salad | Mixed Salad (Lettuce, Tomato, Cucumber) | Green salad | Garden salad | Salad",20,1.2,3.5,0.2,1.5,MANUAL,TRUE
+vegetable,Mixed vegetable sabzi,"Mixed Vegetable Sabzi | Mixed Vegetable Sabzi (Potato, Cauliflower, Bell Pepper) | Mix veg | Subzi",85,2,10,4,2.5,MANUAL,TRUE
+vegetable,Mushroom,Mushrooms | Button mushroom | Khumb,22,3.1,3.3,0.3,1,MANUAL,TRUE
+vegetable,Okra,Bhindi | Bhinda | Lady finger | Okra,33,1.9,7,0.2,3.2,MANUAL,TRUE
+vegetable,Onion,Onion | Pyaz | Sliced red onion | Sliced Red Onions | Chopped onion | Red onion,40,1.1,9,0.1,1.7,MANUAL,TRUE
+vegetable,Palak paneer sabzi,Palak Paneer | Spinach paneer,130,7,5,10,2,MANUAL,TRUE
+vegetable,Palak sabzi,Palak sabzi | Sauteed spinach | Spinach stir-fry,55,3,4,3.5,2.5,MANUAL,TRUE
+vegetable,Parwal,Parwal | Pointed gourd | Potol,20,2,3,0.3,3,MANUAL,TRUE
+vegetable,"Potato, cooked",Potato | Aloo | Boiled potato,87,1.9,20,0.1,1.8,MANUAL,TRUE
+vegetable,Pumpkin,Pumpkin | Kaddu | Cooked Pumpkin | Sitaphal,26,1,7,0.1,0.5,MANUAL,TRUE
+vegetable,Radish,Radish | Mooli | Daikon,16,0.7,3.4,0.1,1.6,MANUAL,TRUE
+vegetable,Raw banana,Kachha kela | Plantain | Green banana,122,1.3,32,0.4,2.3,MANUAL,TRUE
+vegetable,Ridge gourd,Turai | Tori | Jhinga,20,1.2,3,0.5,2,MANUAL,TRUE
+vegetable,Sarson saag,Sarson ka Saag | Mustard greens,60,3,5,3.5,3,MANUAL,TRUE
+vegetable,Sem,Sem | Flat beans | Broad beans | Papdi,40,2.5,7,0.3,3,MANUAL,TRUE
+vegetable,"Spinach, cooked",Spinach | Palak | Cooked spinach,23,2.9,3.6,0.4,2.2,MANUAL,TRUE
+vegetable,Sprouts salad,Sprouts salad | Moong sprouts salad,44,4,6,0.5,2,MANUAL,TRUE
+vegetable,Suran,Yam | Jimikand | Elephant foot yam,118,1.5,28,0.2,4,MANUAL,TRUE
+vegetable,"Sweet potato, cooked",Sweet potato | Shakarkandi | Yam,90,2,21,0.1,3,MANUAL,TRUE
+vegetable,Tinda sabzi,Tinda sabzi | Apple gourd curry,55,1.5,7,2.5,1.5,MANUAL,TRUE
+vegetable,Tomato,Tomato | Tamatar | Tomatoes,18,0.9,3.9,0.2,1.2,MANUAL,TRUE
+vegetable,Tori sabzi,Tori sabzi | Ridge gourd sabzi | Turai ki sabzi,55,1.5,5,3.5,2,MANUAL,TRUE
+vegetable,Zucchini,Zucchini | Courgette | Torai,17,1.2,3.1,0.3,1,MANUAL,TRUE
+gravy,Gravy (Chicken Rogan Josh),Gravy (Chicken Roghan Josh) | Gravy (Kashmiri Chicken Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Mutton Rogan Josh),Gravy (Mutton Roghan Josh) | Gravy (Kashmiri Mutton Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Mutton Do Piaza),Gravy (Mutton Dopiaza) | Gravy (Lamb Do Piaza),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Mutton Yakhni),Gravy (Lamb Yakhni) | Gravy (Mutton Broth Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Mutton Korma),Gravy (Lamb Korma) | Gravy (Mutton White Curry),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Palak Mutton),Gravy (Spinach Mutton) | Gravy (Saag Mutton) | Gravy (Saag Gosht),97.5,2.2,4.7,8.2,1.9,INDB_DERIVED,TRUE
+gravy,Gravy (Keema Curry),Gravy (Kheema Curry) | Gravy (Minced Mutton Curry) | Gravy (Keema Masala),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Matar Keema),Gravy (Pea Keema Curry) | Gravy (Keema Matar),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Fish Curry),Gravy (Machli Curry) | Gravy (Fish Masala) | Gravy (Meen Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Bengal Fish Curry),Gravy (Bengali Fish Curry) | Gravy (Machher Jhol),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Tomato Fish),Gravy (Tamatar Machli) | Gravy (Fish Tomato Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Fish In Coconut Milk),Gravy (Coconut Fish Curry) | Gravy (Nariyal Fish Curry),186.1,1.9,5.9,18.2,1.9,INDB_DERIVED,TRUE
+gravy,Gravy (Prawn Curry),Gravy (Jhinga Curry) | Gravy (Prawn Coconut Curry) | Gravy (Chingri Curry),186.1,1.9,5.9,18.2,1.9,INDB_DERIVED,TRUE
+gravy,Gravy (Egg Curry),Gravy (Anda Curry) | Gravy (Egg Masala) | Gravy (Ande Ki Sabzi),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Chicken Curry),Gravy (Murgh Curry) | Gravy (Chicken Masala Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Butter Chicken),Gravy (Murgh Makhani) | Gravy (Chicken Makhani),154.4,2.1,6,14,1.2,INDB_DERIVED,TRUE
+gravy,Gravy (Chicken Korma),Gravy (Murgh Korma) | Gravy (White Chicken Curry),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Chicken Stew),Gravy (Kerala Chicken Stew) | Gravy (Murgh Stew),186.1,1.9,5.9,18.2,1.9,INDB_DERIVED,TRUE
+gravy,Gravy (Creamy Chicken),Gravy (Chicken In Cream Sauce),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Shahi Chicken Masala),Gravy (Shahi Murgh) | Gravy (Royal Chicken Curry),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Afghani Chicken),Gravy (Afghani Murgh),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Tomato Chicken),Gravy (Tamatar Murgh),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Paneer Curry),Gravy (Paneer Masala),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Matar Paneer),Gravy (Pea And Paneer Curry),98,1,5.2,8.2,1.3,INDB_DERIVED,TRUE
+gravy,Gravy (Paneer Butter Masala),Gravy (Paneer Makhani) | Gravy (Butter Paneer),154.4,2.1,6,14,1.2,INDB_DERIVED,TRUE
+gravy,Gravy (Paneer Lababdar),Gravy (Lababdar Paneer),154.4,2.1,6,14,1.2,INDB_DERIVED,TRUE
+gravy,Gravy (Shahi Paneer),Gravy (Royal Paneer),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Methi Malai Paneer),Gravy (Fenugreek Paneer),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Paneer Makhana Korma),Gravy (Paneer Korma) | Gravy (Makhana Paneer),215,4.5,8.6,18.7,1.6,INDB_DERIVED,TRUE
+gravy,Gravy (Palak Paneer),Gravy (Spinach Paneer) | Gravy (Saag Paneer),97.5,2.2,4.7,8.2,1.9,INDB_DERIVED,TRUE
+gravy,Gravy (Spinach Paneer Kofta),Gravy (Palak Paneer Kofta),97.5,2.2,4.7,8.2,1.9,INDB_DERIVED,TRUE
+gravy,Gravy (Veg Paneer Stew),Gravy (Kerala Paneer Stew),186.1,1.9,5.9,18.2,1.9,INDB_DERIVED,TRUE
+biryani_rice,Rice (Chicken Biryani),Rice (Murgh Biryani) | Rice (Chicken Biriyani),191.6,3.1,30.4,6.2,0.4,INDB_DERIVED,TRUE
+biryani_rice,Rice (Mutton Biryani),Rice (Gosht Biryani) | Rice (Lamb Biryani) | Rice (Mutton Biriyani),191.6,3.1,30.4,6.2,0.4,INDB_DERIVED,TRUE
+biryani_rice,Rice (Prawn Biryani),Rice (Jhinga Biryani) | Rice (Shrimp Biryani) | Rice (Prawn Biriyani),191.6,3.1,30.4,6.2,0.4,INDB_DERIVED,TRUE
+biryani_rice,Rice (Fish Biryani),Rice (Machli Biryani) | Rice (Meen Biryani) | Rice (Fish Biriyani),191.6,3.1,30.4,6.2,0.4,INDB_DERIVED,TRUE
+biryani_rice,Rice (Egg Biryani),Rice (Anda Biryani) | Rice (Egg Biriyani),191.6,3.1,30.4,6.2,0.4,INDB_DERIVED,TRUE
+biryani_rice,Rice (Paneer Biryani),Rice (Paneer Biriyani) | Rice (Cottage Cheese Biryani),191.6,3.1,30.4,6.2,0.4,INDB_DERIVED,TRUEprotein,Egg,"Anda",155,13,1,11,0,INDB_DERIVED,TRUE
+protein,Fish,"Machli|Machhi",136,22,0,5,0,INDB_DERIVED,TRUE
+protein,Mutton,"Gosht|Lamb|Goat meat",258,25,0,17,0,INDB_DERIVED,TRUE
+protein,Prawn,"Jhinga|Shrimp",99,24,0,0.3,0,INDB_DERIVED,TRUE

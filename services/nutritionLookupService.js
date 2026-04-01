@@ -147,17 +147,13 @@ async function matchGravy(parentDish) {
  * 5. Strip common suffixes/prefixes and retry (e.g., "cherry tomatoes" → "tomato")
  */
 async function matchStandalone(itemName) {
-  console.log("ddd " + itemName);
   const name = (itemName || '').trim().toLowerCase();
   const nameEscaped = escapeRegex(name);
-  console.log("eee " + nameEscaped);
-  console.log("fff " + new RegExp(`^${nameEscaped}$`, 'i'));
   // 1. Exact name
   let doc = await FoodItem.findOne({
     name: new RegExp(`^${nameEscaped}$`, 'i'),
     type: 'STANDALONE'
   });
-  console.log("ggg " + doc);
   if (doc) return doc;
 
   // 2. Exact alias
