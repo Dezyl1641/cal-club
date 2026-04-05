@@ -1,6 +1,5 @@
 /**
  * Env-based test user IDs. Used to:
- * - Route AI food-calories to dual-prompt (V2) flow
  * - Enable recommendation system (widget + cron) only for these users
  *
  * Set in .env: TEST_USER_IDS=id1,id2,id3 (comma-separated, no spaces or with spaces trimmed)
