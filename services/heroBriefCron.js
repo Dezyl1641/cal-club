@@ -3,18 +3,7 @@ const HeroBriefService = require('./heroBriefService');
 const Meal = require('../models/schemas/Meal');
 const User = require('../models/schemas/User');
 const { reportError } = require('../utils/sentryReporter');
-
-/**
- * Get today's date in IST (YYYY-MM-DD).
- */
-function getTodayIST() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(new Date());
-}
+const { getTodayDateString } = require('../utils/dateUtils');
 
 /**
  * Get yesterday's date in IST (YYYY-MM-DD).
@@ -70,7 +59,7 @@ async function getActiveUserIds() {
  * Pre-generate hero briefs for a specific phase for all active users.
  */
 async function preGenerateBriefs(phase) {
-  const today = getTodayIST();
+  const today = getTodayDateString();
   const userIds = await getActiveUserIds();
 
   if (userIds.length === 0) {
@@ -82,20 +71,25 @@ async function preGenerateBriefs(phase) {
 
   let successCount = 0;
   let errorCount = 0;
+  const CONCURRENCY = 5;
 
-  // Process sequentially to avoid overwhelming Gemini API
-  for (const userId of userIds) {
-    try {
-      await HeroBriefService.getOrGenerateBrief(userId, today, phase, false);
-      successCount++;
-    } catch (error) {
-      errorCount++;
-      console.error(`[HeroBriefCron] Error generating ${phase} brief for user ${userId}:`, error.message);
-      // Don't report every individual failure to Sentry — just log it
+  // Process in batches with controlled concurrency
+  for (let i = 0; i < userIds.length; i += CONCURRENCY) {
+    const batch = userIds.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map(userId => HeroBriefService.getOrGenerateBrief(userId, today, phase, false))
+    );
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        successCount++;
+      } else {
+        errorCount++;
+        console.error(`[HeroBriefCron] Error generating ${phase} brief:`, result.reason?.message);
+      }
     }
 
-    // Small delay between users to be kind to Gemini rate limits
-    if (userIds.length > 10) {
+    // Small delay between batches to be kind to Gemini rate limits
+    if (i + CONCURRENCY < userIds.length) {
       await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
