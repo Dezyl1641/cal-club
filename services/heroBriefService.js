@@ -9,15 +9,24 @@ const MealService = require('./mealService');
 const { PHASE_FALLBACKS, PHASE_HEADLINES, getCurrentPhaseIST } = require('../config/heroBriefFallbacks');
 const { SYSTEM_INSTRUCTION, buildPrompt } = require('../config/heroBriefPrompt');
 const { reportError } = require('../utils/sentryReporter');
+const { getTodayDateString } = require('../utils/dateUtils');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+if (!GEMINI_API_KEY) {
+  console.error('[HeroBrief] GEMINI_API_KEY is not set — hero brief generation will use fallbacks');
+}
+const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 // --- Circuit breaker state (in-memory, per-process) ---
 // Keyed by userId string. Resets on server restart, which is acceptable.
 const circuitBreaker = new Map();
 const CIRCUIT_BREAKER_THRESHOLD = 3;
 const CIRCUIT_BREAKER_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+// --- Regeneration rate limiter (in-memory, per-process) ---
+// Prevents clients from spamming regenerate=true
+const regenerationTimestamps = new Map(); // key: "userId:date:phase" → last regeneration time
+const REGENERATION_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes per phase
 
 class HeroBriefService {
 
@@ -37,17 +46,13 @@ class HeroBriefService {
   static async getOrGenerateBrief(userId, date, phase, regenerate = false) {
     try {
       // Determine if this phase is the current active phase for today
-      const todayIST = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).format(new Date());
+      const todayIST = getTodayDateString();
       const isToday = date === todayIST;
       const currentPhase = getCurrentPhaseIST();
       const isActivePhase = isToday && phase === currentPhase;
 
       // 1. Check cache
+      let inputHash = null;
       const cached = await HeroBrief.findOne({ userId, date, phase }).lean();
       if (cached) {
         // Past days and past phases: always return cache, never regenerate
@@ -60,10 +65,24 @@ class HeroBriefService {
           };
         }
 
+        // Active phase: rate-limit forced regeneration
+        if (regenerate) {
+          const regenKey = `${userId}:${date}:${phase}`;
+          const lastRegen = regenerationTimestamps.get(regenKey);
+          if (lastRegen && Date.now() - lastRegen < REGENERATION_COOLDOWN_MS) {
+            return {
+              phase: cached.phase,
+              headline: PHASE_HEADLINES[cached.phase],
+              guidanceText: cached.guidanceText,
+              tier: cached.tier
+            };
+          }
+        }
+
         // Active phase: check if data changed (unless forced regeneration)
         if (!regenerate) {
-          const currentHash = await this.computeInputHash(userId, date);
-          if (cached.inputHash === currentHash) {
+          inputHash = await this.computeInputHash(userId, date);
+          if (cached.inputHash === inputHash) {
             return {
               phase: cached.phase,
               headline: PHASE_HEADLINES[cached.phase],
@@ -85,10 +104,10 @@ class HeroBriefService {
       const inputData = await this.assembleInputData(userId, date, phase);
 
       // 4. Generate via Gemini
-      const guidanceText = await this.generateWithGemini(inputData);
+      const guidanceText = await this.generateWithGemini(userId, inputData);
 
-      // 5. Cache the result (upsert)
-      const inputHash = await this.computeInputHash(userId, date);
+      // 5. Cache the result (upsert) — reuse hash if already computed
+      if (!inputHash) inputHash = await this.computeInputHash(userId, date);
       await HeroBrief.findOneAndUpdate(
         { userId, date, phase },
         {
@@ -106,6 +125,9 @@ class HeroBriefService {
 
       // Reset circuit breaker on success
       this.resetCircuit(userId);
+
+      // Record regeneration timestamp for rate limiting
+      regenerationTimestamps.set(`${userId}:${date}:${phase}`, Date.now());
 
       return {
         phase,
@@ -157,7 +179,7 @@ class HeroBriefService {
       proteinGoal: goals.dailyProtein,
       proteinConsumed: todayNutrition.protein,
       mealsToday,
-      mealHistory,
+      mealHistory: mealHistory.meals,
       dietPreference,
       tier
     };
@@ -220,11 +242,20 @@ class HeroBriefService {
         capturedAt: { $gte: startDate }
       }).lean();
 
-      if (!meals || meals.length === 0) return [];
+      if (!meals || meals.length === 0) return { meals: [], uniqueDays: 0 };
 
-      // Aggregate by meal name
+      // Count unique days (by IST date)
+      const daySet = new Set();
       const mealMap = new Map();
       for (const meal of meals) {
+        if (meal.capturedAt) {
+          const dayStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+          }).format(new Date(meal.capturedAt));
+          daySet.add(dayStr);
+        }
+
         const name = meal.name || 'Unknown';
         const existing = mealMap.get(name);
         if (existing) {
@@ -241,10 +272,13 @@ class HeroBriefService {
       }
 
       // Sort by frequency descending
-      return Array.from(mealMap.values()).sort((a, b) => b.frequency - a.frequency);
+      return {
+        meals: Array.from(mealMap.values()).sort((a, b) => b.frequency - a.frequency),
+        uniqueDays: daySet.size
+      };
     } catch (error) {
       console.error('[HeroBrief] Error fetching meal history:', error.message);
-      return [];
+      return { meals: [], uniqueDays: 0 };
     }
   }
 
@@ -293,10 +327,8 @@ class HeroBriefService {
    * Tier 2: >= 7 unique days with meals
    */
   static detectTier(mealHistory) {
-    if (!mealHistory || mealHistory.length === 0) return 0;
-
-    const totalMeals = mealHistory.reduce((sum, m) => sum + m.frequency, 0);
-    if (totalMeals < 7) return 1;
+    if (!mealHistory || mealHistory.meals.length === 0) return 0;
+    if (mealHistory.uniqueDays < 7) return 1;
     return 2;
   }
 
@@ -304,7 +336,10 @@ class HeroBriefService {
   // LLM generation
   // -------------------------------------------------------------------
 
-  static async generateWithGemini(inputData) {
+  static async generateWithGemini(userId, inputData) {
+    if (!genAI) {
+      throw new Error('GEMINI_API_KEY not configured');
+    }
     try {
       const model = genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
@@ -339,7 +374,7 @@ class HeroBriefService {
 
       return text;
     } catch (error) {
-      this.recordFailure(inputData.userId || 'unknown');
+      this.recordFailure(userId);
       throw error;
     }
   }
@@ -449,21 +484,12 @@ class HeroBriefService {
   }
 
   /**
-   * Determine which phase tabs should be active for the current time.
-   * Returns an array of phases that have occurred or are current.
-   */
-  /**
    * Get available phase tabs for a user on a given date.
    * Only includes phases that have cached briefs + the current active phase.
    * Returns objects: [{ phase, label }] where the current phase is labeled "Now".
    */
   static async getAvailablePhaseTabs(userId, date) {
-    const todayIST = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(new Date());
+    const todayIST = getTodayDateString();
     const isToday = date === todayIST;
 
     if (!isToday) {

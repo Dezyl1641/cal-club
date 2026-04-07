@@ -7,9 +7,9 @@
  */
 
 const PHASE_FALLBACKS = {
-  morning: "Good morning. You have a clean slate today with your full calorie and protein targets ahead. Start by logging your first meal — aim for something protein-rich to set a strong foundation. Once I learn what you enjoy, I can tailor suggestions just for you. Let's make today count.",
-  midday: "It's midday and you're getting started. Log what you've eaten so far to see how you're tracking against your goals. A balanced afternoon meal with good protein will help you stay on course. I'll have better suggestions once I know your preferences. Keep it going.",
-  evening: "Wrapping up the day. Log any remaining meals to get your full daily summary and see how close you came to your targets. Every day of tracking helps me understand your habits better. Tomorrow I'll have more personalized guidance for you. Rest well tonight."
+  morning: "Good morning. Your full calorie and protein targets are ahead. Log your first meal — aim for something protein-rich. Once I learn what you enjoy, I'll tailor suggestions for you.",
+  midday: "Midday check-in. Log what you've eaten so far to see how you're tracking. A balanced meal with good protein will keep you on course. Keep it going.",
+  evening: "Wrapping up the day. Log any remaining meals for your daily summary. Every day of tracking helps me understand your habits. Rest well tonight."
 };
 
 const PHASE_HEADLINES = {
@@ -66,10 +66,9 @@ function validatePhase(clientPhase) {
   const clientIdx = phaseOrder.indexOf(clientPhase);
   const serverIdx = phaseOrder.indexOf(serverPhase);
 
-  // Adjacent means difference of 1 (or wrapping: evening->morning)
+  // Adjacent means difference of exactly 1, or evening→morning wrap
   const diff = Math.abs(clientIdx - serverIdx);
-  if (diff === 1 || diff === 2) {
-    // Within grace window — trust the client
+  if (diff === 1) {
     return clientPhase;
   }
 

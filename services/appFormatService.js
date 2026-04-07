@@ -9,6 +9,7 @@ const Membership = require('../models/schemas/Membership');
 const { checkMembership } = require('../utils/membershipCheck');
 const { isTestUser } = require('../config/testUsers');
 const { validatePhase, getCurrentPhaseIST } = require('../config/heroBriefFallbacks');
+const { getTodayDateString } = require('../utils/dateUtils');
 
 // Interfaces for type consistency
 const AppBarData = {
@@ -144,12 +145,7 @@ class AppFormatService {
       const membershipStatus = await checkMembership(userId);
 
       // --- Determine if this is a past day ---
-      const todayIST = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      }).format(new Date());
+      const todayIST = getTodayDateString();
       const isPastDay = date < todayIST;
 
       // --- Hero section ---
@@ -353,14 +349,12 @@ class AppFormatService {
       } else {
         phase = validatePhase(clientPhase);
         showPhaseTabs = true;
-        // Get available tabs based on actual cached briefs
-        activePhaseTabs = await HeroBriefService.getAvailablePhaseTabs(userId, date);
       }
 
       // Generate or retrieve the brief
       const brief = await HeroBriefService.getOrGenerateBrief(userId, date, phase, regenerate);
 
-      // Refresh tabs after generation (the current phase brief now exists)
+      // Get tabs after generation so the current phase brief is included
       if (!isPastDay) {
         activePhaseTabs = await HeroBriefService.getAvailablePhaseTabs(userId, date);
       }
