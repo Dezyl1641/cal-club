@@ -1630,8 +1630,6 @@ async function cloneMeal(req, res) {
       items: clonedItems,
       notes: originalMeal.notes || '',
       userApproved: false,
-      inputTokens: null,
-      outputTokens: null,
       source: 'cloned',
       clonedFrom: originalMeal._id
     });
