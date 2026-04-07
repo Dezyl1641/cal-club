@@ -4,6 +4,8 @@ const { reportError } = require('../utils/sentryReporter');
 async function getAppCalendar(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const date = url.searchParams.get('date');
+  const phase = url.searchParams.get('phase') || null;
+  const regenerate = url.searchParams.get('regenerate') === 'true';
 
   if (!date) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -20,7 +22,7 @@ async function getAppCalendar(req, res) {
   }
 
   try {
-    const appCalendarData = await AppFormatService.getAppCalendarData(req.user.userId, date);
+    const appCalendarData = await AppFormatService.getAppCalendarData(req.user.userId, date, { phase, regenerate });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(appCalendarData));
   } catch (error) {

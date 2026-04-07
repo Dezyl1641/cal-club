@@ -1,5 +1,6 @@
 const MealService = require('./mealService');
 const RecommendationService = require('./recommendationService');
+const HeroBriefService = require('./heroBriefService');
 const { findUserById } = require('../models/user');
 const User = require('../models/schemas/User');
 const Question = require('../models/schemas/Question');
@@ -7,6 +8,8 @@ const UserQuestion = require('../models/schemas/UserQuestion');
 const Membership = require('../models/schemas/Membership');
 const { checkMembership } = require('../utils/membershipCheck');
 const { isTestUser } = require('../config/testUsers');
+const { validatePhase, getCurrentPhaseIST } = require('../config/heroBriefFallbacks');
+const { getTodayDateString } = require('../utils/dateUtils');
 
 // Interfaces for type consistency
 const AppBarData = {
@@ -82,11 +85,13 @@ const AppCalendarResponse = {
 };
 
 class AppFormatService {
-  static async getAppCalendarData(userId, date) {
+  static async getAppCalendarData(userId, date, options = {}) {
     try {
+      const { phase: clientPhase = null, regenerate = false } = options;
+
       // Get the raw calendar data
       const calendarData = await MealService.getCalendarData(userId, date);
-      
+
       // Get user data for goals
       const user = await findUserById(userId);
       const goals = user?.goals || {
@@ -95,7 +100,7 @@ class AppFormatService {
         dailyCarbs: 250,
         dailyFats: 65
       };
-      
+
       // Parse the date in IST context
       // If date is a string (YYYY-MM-DD), treat it as IST date
       let currentDate;
@@ -107,7 +112,7 @@ class AppFormatService {
       } else {
         currentDate = new Date(date);
       }
-      
+
       // Get day of week in IST
       const istFormatter = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Kolkata',
@@ -132,26 +137,25 @@ class AppFormatService {
       
       // Calculate today's nutrition totals
       const todayData = this.getTodayNutritionData(calendarData, currentDate);
-      
+
       // Get today's meals for logged widget
       const todayMeals = await this.getTodayMeals(userId, currentDate);
-      
-      // Get recommendation widget data
-      const recommendationWidget = await this.formatRecommendationWidget(userId);
 
       // Get membership status for paywall / membership info
       const membershipStatus = await checkMembership(userId);
-      
+
+      // --- Determine if this is a past day ---
+      const todayIST = getTodayDateString();
+      const isPastDay = date < todayIST;
+
+      // --- Hero section ---
+      const heroSectionWidget = await this.formatHeroSectionWidget(
+        userId, date, todayData, goals, clientPhase, regenerate, isPastDay
+      );
+
       // Format the response
-      const widgets = [
-        this.formatMacroWidget(todayData, goals)
-      ];
-      
-      // Add recommendation widget if available
-      if (recommendationWidget) {
-        widgets.push(recommendationWidget);
-      }
-      
+      const widgets = [heroSectionWidget];
+
       // Add logged widget
       widgets.push(this.formatLoggedWidget(todayMeals));
 
@@ -159,7 +163,7 @@ class AppFormatService {
       if (!membershipStatus.hasAccess) {
         widgets.push(this.formatPaywallWidget());
       }
-      
+
       return {
         appBarData: this.formatAppBarData(todayData, goals.dailyCalories),
         weekViewData: this.formatWeekViewData(mondayDate, currentDate),
@@ -325,6 +329,87 @@ class AppFormatService {
         ]
       }
     };
+  }
+
+  /**
+   * Format the hero section widget with LLM guidance text.
+   * For past days, always shows Evening Wrap with no phase tabs.
+   */
+  static async formatHeroSectionWidget(userId, date, todayData, goals, clientPhase, regenerate, isPastDay) {
+    try {
+      // Determine phase
+      let phase;
+      let showPhaseTabs;
+      let activePhaseTabs;
+
+      if (isPastDay) {
+        phase = 'evening';
+        showPhaseTabs = false;
+        activePhaseTabs = [];
+      } else {
+        phase = validatePhase(clientPhase);
+        showPhaseTabs = true;
+      }
+
+      // Generate or retrieve the brief
+      const brief = await HeroBriefService.getOrGenerateBrief(userId, date, phase, regenerate);
+
+      // Get tabs after generation so the current phase brief is included
+      if (!isPastDay) {
+        activePhaseTabs = await HeroBriefService.getAvailablePhaseTabs(userId, date);
+      }
+
+      // Compute effective target (goal + exercise burn)
+      // Exercise burn comes from client via Apple Health; server defaults to 0
+      const exerciseBurn = todayData.exerciseBurn || 0;
+      const effectiveTarget = goals.dailyCalories + exerciseBurn;
+
+      return {
+        widgetType: 'hero_section',
+        widgetData: {
+          phase: brief.phase,
+          headline: brief.headline,
+          guidanceText: brief.guidanceText,
+          showPhaseTabs,
+          activePhaseTabs,
+          calories: {
+            consumed: parseFloat(todayData.totalCalories.toFixed(2)),
+            goal: goals.dailyCalories,
+            burn: exerciseBurn,
+            effectiveTarget
+          },
+          protein: {
+            consumed: parseFloat(todayData.totalProtein.toFixed(2)),
+            goal: goals.dailyProtein
+          }
+        }
+      };
+    } catch (error) {
+      console.error('[AppFormatService] Error formatting hero section:', error.message);
+      // Return a minimal fallback hero section
+      const { PHASE_FALLBACKS, PHASE_HEADLINES, getCurrentPhaseIST } = require('../config/heroBriefFallbacks');
+      const fallbackPhase = isPastDay ? 'evening' : getCurrentPhaseIST();
+      return {
+        widgetType: 'hero_section',
+        widgetData: {
+          phase: fallbackPhase,
+          headline: PHASE_HEADLINES[fallbackPhase],
+          guidanceText: PHASE_FALLBACKS[fallbackPhase],
+          showPhaseTabs: !isPastDay,
+          activePhaseTabs: isPastDay ? [] : [fallbackPhase],
+          calories: {
+            consumed: parseFloat((todayData?.totalCalories || 0).toFixed(2)),
+            goal: goals?.dailyCalories || 2000,
+            burn: 0,
+            effectiveTarget: goals?.dailyCalories || 2000
+          },
+          protein: {
+            consumed: parseFloat((todayData?.totalProtein || 0).toFixed(2)),
+            goal: goals?.dailyProtein || 150
+          }
+        }
+      };
+    }
   }
 
   static formatLoggedWidget(todayMeals) {
