@@ -114,9 +114,10 @@ async function updateMeal(req, res) {
     }
 
     try {
-      const { mealId, itemId, newQuantity, newItem } = data;
+      const { mealId, itemId, newQuantity, newMeasureQuantity, newItem } = data;
       const userId = req.user.userId;
       console.log('newQuantity: ' + newQuantity);
+      console.log('newMeasureQuantity: ' + newMeasureQuantity);
       console.log('newItem: ' + newItem);
       console.log('mealId: ' + mealId);
       console.log('itemId: ' + itemId);
@@ -156,8 +157,8 @@ async function updateMeal(req, res) {
                                  nutritionUpdate.carbs !== undefined || 
                                  nutritionUpdate.fat !== undefined;
 
-      // Case 1: Quantity update (newQuantity is non-null, newItem is null)
-      if (newQuantity !== null && newQuantity !== undefined && !newItem) {
+      // Case 1a: DisplayQuantity update (newQuantity is non-null, newItem is null)
+      if (newQuantity !== null && newQuantity !== undefined && !newItem && !(newMeasureQuantity !== null && newMeasureQuantity !== undefined)) {
         editType = 'QUANTITY_UPDATE';
 
         // Track quantity change
@@ -180,9 +181,19 @@ async function updateMeal(req, res) {
           unit: item.displayQuantity.llm.unit
         };
 
+        // Also update measureQuantity proportionally
+        const oldMeasure = (item.measureQuantity?.final?.value !== null && item.measureQuantity?.final?.value !== undefined)
+          ? item.measureQuantity.final.value
+          : item.measureQuantity?.llm?.value;
+        if (oldMeasure) {
+          item.measureQuantity.final = {
+            value: parseFloat((oldMeasure * ratio).toFixed(1)),
+            unit: item.measureQuantity?.final?.unit || item.measureQuantity?.llm?.unit || 'g'
+          };
+        }
+
         // Update final nutrition proportionally (only if not being updated directly)
         if (!hasNutritionUpdate) {
-          // If final exists, use final * ratio (subsequent update), otherwise use llm * ratio (first update)
           const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined)
             ? item.nutrition.calories.final
             : item.nutrition.calories.llm;
@@ -200,19 +211,86 @@ async function updateMeal(req, res) {
           const newProtein = parseFloat((baseProtein * ratio).toFixed(2));
           const newCarbs = parseFloat((baseCarbs * ratio).toFixed(2));
           const newFat = parseFloat((baseFat * ratio).toFixed(2));
-          
-          // Track nutrition changes
+
           changes.push(
             { itemId, field: 'calories', previousValue: baseCalories, newValue: newCalories },
             { itemId, field: 'protein', previousValue: baseProtein, newValue: newProtein },
             { itemId, field: 'carbs', previousValue: baseCarbs, newValue: newCarbs },
             { itemId, field: 'fat', previousValue: baseFat, newValue: newFat }
           );
-          
+
           item.nutrition.calories.final = newCalories;
           item.nutrition.protein.final = newProtein;
           item.nutrition.carbs.final = newCarbs;
           item.nutrition.fat.final = newFat;
+        }
+      }
+
+      // Case 1b: MeasureQuantity update (newMeasureQuantity is non-null, newItem is null)
+      if (newMeasureQuantity !== null && newMeasureQuantity !== undefined && !newItem) {
+        editType = 'MEASURE_QUANTITY_UPDATE';
+
+        const oldMeasure = (item.measureQuantity?.final?.value !== null && item.measureQuantity?.final?.value !== undefined)
+          ? item.measureQuantity.final.value
+          : item.measureQuantity?.llm?.value;
+
+        if (oldMeasure) {
+          const ratio = newMeasureQuantity / oldMeasure;
+
+          changes.push({
+            itemId: itemId,
+            field: 'measureQuantity',
+            previousValue: oldMeasure,
+            newValue: newMeasureQuantity
+          });
+
+          // Update measureQuantity
+          item.measureQuantity.final = {
+            value: newMeasureQuantity,
+            unit: item.measureQuantity?.final?.unit || item.measureQuantity?.llm?.unit || 'g'
+          };
+
+          // Also update displayQuantity proportionally
+          const oldDisplay = (item.displayQuantity.final?.value !== null && item.displayQuantity.final?.value !== undefined)
+            ? item.displayQuantity.final.value
+            : item.displayQuantity.llm.value;
+          item.displayQuantity.final = {
+            value: parseFloat((oldDisplay * ratio).toFixed(2)),
+            unit: item.displayQuantity.llm.unit
+          };
+
+          // Update nutrition proportionally
+          if (!hasNutritionUpdate) {
+            const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined)
+              ? item.nutrition.calories.final
+              : item.nutrition.calories.llm;
+            const baseProtein = (item.nutrition.protein.final !== null && item.nutrition.protein.final !== undefined)
+              ? item.nutrition.protein.final
+              : item.nutrition.protein.llm;
+            const baseCarbs = (item.nutrition.carbs.final !== null && item.nutrition.carbs.final !== undefined)
+              ? item.nutrition.carbs.final
+              : item.nutrition.carbs.llm;
+            const baseFat = (item.nutrition.fat.final !== null && item.nutrition.fat.final !== undefined)
+              ? item.nutrition.fat.final
+              : item.nutrition.fat.llm;
+
+            const newCalories = parseFloat((baseCalories * ratio).toFixed(2));
+            const newProtein = parseFloat((baseProtein * ratio).toFixed(2));
+            const newCarbs = parseFloat((baseCarbs * ratio).toFixed(2));
+            const newFat = parseFloat((baseFat * ratio).toFixed(2));
+
+            changes.push(
+              { itemId, field: 'calories', previousValue: baseCalories, newValue: newCalories },
+              { itemId, field: 'protein', previousValue: baseProtein, newValue: newProtein },
+              { itemId, field: 'carbs', previousValue: baseCarbs, newValue: newCarbs },
+              { itemId, field: 'fat', previousValue: baseFat, newValue: newFat }
+            );
+
+            item.nutrition.calories.final = newCalories;
+            item.nutrition.protein.final = newProtein;
+            item.nutrition.carbs.final = newCarbs;
+            item.nutrition.fat.final = newFat;
+          }
         }
       }
 
@@ -240,7 +318,9 @@ async function updateMeal(req, res) {
       }
 
       // If quantity or nutrition was updated, recompute total nutrition
-      if ((newQuantity !== null && newQuantity !== undefined && !newItem) || hasNutritionUpdate) {
+      const hasQuantityUpdate = (newQuantity !== null && newQuantity !== undefined && !newItem) ||
+                                (newMeasureQuantity !== null && newMeasureQuantity !== undefined && !newItem);
+      if (hasQuantityUpdate || hasNutritionUpdate) {
         // Recompute total nutrition using final values
         const updatedMeal = await recomputeTotalNutrition(meal);
         await updatedMeal.save();
@@ -614,7 +694,7 @@ function bulkEditItems(req, res) {
 
       // Process each item update request
       for (const itemUpdate of items) {
-        const { itemId, newQuantity, newItem } = itemUpdate;
+        const { itemId, newQuantity, newMeasureQuantity, newItem } = itemUpdate;
 
         if (!itemId) {
           console.error('❌ [BULK_EDIT] Missing itemId in update request:', itemUpdate);
@@ -653,11 +733,12 @@ function bulkEditItems(req, res) {
         }
 
         // Store the update data (keep newItem in map for consistency, but we'll skip AI call if it's same)
-        itemUpdates.set(itemId, { 
-          itemIndex, 
-          newQuantity, 
+        itemUpdates.set(itemId, {
+          itemIndex,
+          newQuantity,
+          newMeasureQuantity,
           newItem: shouldTreatAsQuantityOnly ? undefined : newItem, // Clear newItem if treating as quantity-only
-          originalItem: item 
+          originalItem: item
         });
 
         console.log('📝 [BULK_EDIT] Processing item update:', {
@@ -768,7 +849,7 @@ function bulkEditItems(req, res) {
       console.log('📝 [BULK_EDIT] Applying updates to items, total:', itemUpdates.size);
       let aiItemIndex = 0;
       for (const [itemId, updateData] of itemUpdates) {
-        const { itemIndex, newQuantity, newItem, originalItem } = updateData;
+        const { itemIndex, newQuantity, newMeasureQuantity, newItem, originalItem } = updateData;
         const item = meal.items[itemIndex];
 
         if (newItem && aiResult) {
@@ -831,61 +912,40 @@ function bulkEditItems(req, res) {
           item.nutrition.carbs.final = aiItem.nutrition.carbs;
           item.nutrition.fat.final = aiItem.nutrition.fat;
 
-        } else if (newQuantity !== null && newQuantity !== undefined && !newItem) {
-          // Case: Only quantity changed - calculate proportionally
-          // Determine old quantity: use final if it exists (subsequent update), otherwise use llm (first update)
+        } else if (!newItem && (newQuantity !== null && newQuantity !== undefined) && !(newMeasureQuantity !== null && newMeasureQuantity !== undefined)) {
+          // Case: Only displayQuantity changed - calculate proportionally
           const oldQuantity = (item.displayQuantity.final?.value !== null && item.displayQuantity.final?.value !== undefined)
             ? item.displayQuantity.final.value
             : item.displayQuantity.llm.value;
           const ratio = newQuantity / oldQuantity;
 
-          console.log('📝 [BULK_EDIT] Applying quantity-only update:', {
-            itemId,
-            oldQuantity,
-            newQuantity,
-            ratio,
-            currentNutrition: {
-              calories: item.nutrition.calories.final || item.nutrition.calories.llm,
-              protein: item.nutrition.protein.final || item.nutrition.protein.llm
-            }
-          });
+          console.log('📝 [BULK_EDIT] Applying displayQuantity-only update:', { itemId, oldQuantity, newQuantity, ratio });
 
-          // Track quantity change
-          changes.push({
-            itemId: itemId,
-            field: 'displayQuantity',
-            previousValue: oldQuantity,
-            newValue: newQuantity
-          });
+          changes.push({ itemId, field: 'displayQuantity', previousValue: oldQuantity, newValue: newQuantity });
 
-          // Update final displayQuantity
-          item.displayQuantity.final = {
-            value: newQuantity,
-            unit: item.displayQuantity.llm.unit
-          };
+          item.displayQuantity.final = { value: newQuantity, unit: item.displayQuantity.llm.unit };
 
-          // Calculate new nutrition values proportionally
-          // If final exists, use final * ratio (subsequent update), otherwise use llm * ratio (first update)
-          const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined)
-            ? item.nutrition.calories.final
-            : item.nutrition.calories.llm;
-          const baseProtein = (item.nutrition.protein.final !== null && item.nutrition.protein.final !== undefined)
-            ? item.nutrition.protein.final
-            : item.nutrition.protein.llm;
-          const baseCarbs = (item.nutrition.carbs.final !== null && item.nutrition.carbs.final !== undefined)
-            ? item.nutrition.carbs.final
-            : item.nutrition.carbs.llm;
-          const baseFat = (item.nutrition.fat.final !== null && item.nutrition.fat.final !== undefined)
-            ? item.nutrition.fat.final
-            : item.nutrition.fat.llm;
+          // Also update measureQuantity proportionally
+          const oldMeasure = (item.measureQuantity?.final?.value !== null && item.measureQuantity?.final?.value !== undefined)
+            ? item.measureQuantity.final.value : item.measureQuantity?.llm?.value;
+          if (oldMeasure) {
+            item.measureQuantity.final = {
+              value: parseFloat((oldMeasure * ratio).toFixed(1)),
+              unit: item.measureQuantity?.final?.unit || item.measureQuantity?.llm?.unit || 'g'
+            };
+          }
 
-          // Update final nutrition proportionally
+          // Scale nutrition proportionally
+          const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined) ? item.nutrition.calories.final : item.nutrition.calories.llm;
+          const baseProtein = (item.nutrition.protein.final !== null && item.nutrition.protein.final !== undefined) ? item.nutrition.protein.final : item.nutrition.protein.llm;
+          const baseCarbs = (item.nutrition.carbs.final !== null && item.nutrition.carbs.final !== undefined) ? item.nutrition.carbs.final : item.nutrition.carbs.llm;
+          const baseFat = (item.nutrition.fat.final !== null && item.nutrition.fat.final !== undefined) ? item.nutrition.fat.final : item.nutrition.fat.llm;
+
           const newCalories = parseFloat((baseCalories * ratio).toFixed(2));
           const newProtein = parseFloat((baseProtein * ratio).toFixed(2));
           const newCarbs = parseFloat((baseCarbs * ratio).toFixed(2));
           const newFat = parseFloat((baseFat * ratio).toFixed(2));
 
-          // Track nutrition changes
           changes.push(
             { itemId, field: 'calories', previousValue: baseCalories, newValue: newCalories },
             { itemId, field: 'protein', previousValue: baseProtein, newValue: newProtein },
@@ -897,6 +957,55 @@ function bulkEditItems(req, res) {
           item.nutrition.protein.final = newProtein;
           item.nutrition.carbs.final = newCarbs;
           item.nutrition.fat.final = newFat;
+
+        } else if (!newItem && newMeasureQuantity !== null && newMeasureQuantity !== undefined) {
+          // Case: MeasureQuantity changed - calculate proportionally
+          const oldMeasure = (item.measureQuantity?.final?.value !== null && item.measureQuantity?.final?.value !== undefined)
+            ? item.measureQuantity.final.value : item.measureQuantity?.llm?.value;
+
+          if (oldMeasure) {
+            const ratio = newMeasureQuantity / oldMeasure;
+
+            console.log('📝 [BULK_EDIT] Applying measureQuantity update:', { itemId, oldMeasure, newMeasureQuantity, ratio });
+
+            changes.push({ itemId, field: 'measureQuantity', previousValue: oldMeasure, newValue: newMeasureQuantity });
+
+            item.measureQuantity.final = {
+              value: newMeasureQuantity,
+              unit: item.measureQuantity?.final?.unit || item.measureQuantity?.llm?.unit || 'g'
+            };
+
+            // Also update displayQuantity proportionally
+            const oldDisplay = (item.displayQuantity.final?.value !== null && item.displayQuantity.final?.value !== undefined)
+              ? item.displayQuantity.final.value : item.displayQuantity.llm.value;
+            item.displayQuantity.final = {
+              value: parseFloat((oldDisplay * ratio).toFixed(2)),
+              unit: item.displayQuantity.llm.unit
+            };
+
+            // Scale nutrition proportionally
+            const baseCalories = (item.nutrition.calories.final !== null && item.nutrition.calories.final !== undefined) ? item.nutrition.calories.final : item.nutrition.calories.llm;
+            const baseProtein = (item.nutrition.protein.final !== null && item.nutrition.protein.final !== undefined) ? item.nutrition.protein.final : item.nutrition.protein.llm;
+            const baseCarbs = (item.nutrition.carbs.final !== null && item.nutrition.carbs.final !== undefined) ? item.nutrition.carbs.final : item.nutrition.carbs.llm;
+            const baseFat = (item.nutrition.fat.final !== null && item.nutrition.fat.final !== undefined) ? item.nutrition.fat.final : item.nutrition.fat.llm;
+
+            const newCalories = parseFloat((baseCalories * ratio).toFixed(2));
+            const newProtein = parseFloat((baseProtein * ratio).toFixed(2));
+            const newCarbs = parseFloat((baseCarbs * ratio).toFixed(2));
+            const newFat = parseFloat((baseFat * ratio).toFixed(2));
+
+            changes.push(
+              { itemId, field: 'calories', previousValue: baseCalories, newValue: newCalories },
+              { itemId, field: 'protein', previousValue: baseProtein, newValue: newProtein },
+              { itemId, field: 'carbs', previousValue: baseCarbs, newValue: newCarbs },
+              { itemId, field: 'fat', previousValue: baseFat, newValue: newFat }
+            );
+
+            item.nutrition.calories.final = newCalories;
+            item.nutrition.protein.final = newProtein;
+            item.nutrition.carbs.final = newCarbs;
+            item.nutrition.fat.final = newFat;
+          }
         }
       }
 
