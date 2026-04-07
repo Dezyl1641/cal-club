@@ -23,24 +23,8 @@ const nutritionSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-const quantitySchema = new mongoose.Schema({
-  value: Number,
-  unit: String,
-  normalized: {
-    value: Number,
-    unit: String
-  }
-}, { _id: false });
-
-const itemQuantitySchema = new mongoose.Schema({
-  llm: quantitySchema,
-  final: {
-    value: Number,
-    unit: String
-  }
-}, { _id: false });
-
-const itemQuantityAlternateSchema = new mongoose.Schema({
+// displayQuantity: user-friendly quantity shown in UI (e.g. "2 rotis", "1 small bowl")
+const displayQuantitySchema = new mongoose.Schema({
   llm: {
     value: Number,
     unit: String
@@ -48,6 +32,18 @@ const itemQuantityAlternateSchema = new mongoose.Schema({
   final: {
     value: Number,
     unit: String
+  }
+}, { _id: false });
+
+// measureQuantity: actual weight/volume used for nutrition calculations (e.g. "150 g", "250 ml")
+const measureQuantitySchema = new mongoose.Schema({
+  llm: {
+    value: Number,
+    unit: { type: String, enum: ['g', 'ml'], default: 'g' }
+  },
+  final: {
+    value: Number,
+    unit: { type: String, enum: ['g', 'ml'], default: 'g' }
   }
 }, { _id: false });
 
@@ -60,8 +56,8 @@ const itemSchema = new mongoose.Schema({
     llm: String,
     final: String
   },
-  quantity: itemQuantitySchema,
-  quantityAlternate: itemQuantityAlternateSchema,
+  displayQuantity: displayQuantitySchema,
+  measureQuantity: measureQuantitySchema,
   nutrition: nutritionSchema,
   confidence: Number,
   nutritionSource: {
@@ -83,7 +79,6 @@ const itemSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
-  grams: { type: Number, default: null },
   parentDish: { type: String, default: null },
   componentType: { type: String, default: null }, // 'protein' | 'gravy' when set
   proteinForm: { type: String, default: null },
@@ -121,13 +116,11 @@ const mealSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  inputTokens: {
-    type: Number,
-    default: null
-  },
-  outputTokens: {
-    type: Number,
-    default: null
+  tokens: {
+    step1: { input: { type: Number, default: null }, output: { type: Number, default: null } },
+    decomposition: { input: { type: Number, default: null }, output: { type: Number, default: null } },
+    batchNutrition: { input: { type: Number, default: null }, output: { type: Number, default: null } },
+    total: { input: { type: Number, default: null }, output: { type: Number, default: null } }
   },
   deletedAt: {
     type: Date,

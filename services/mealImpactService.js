@@ -18,8 +18,8 @@ class MealImpactService {
       protein: Math.round((item.nutrition?.protein?.final || item.nutrition?.protein?.llm || 0) * 10) / 10,
       carbs: Math.round((item.nutrition?.carbs?.final || item.nutrition?.carbs?.llm || 0) * 10) / 10,
       fat: Math.round((item.nutrition?.fat?.final || item.nutrition?.fat?.llm || 0) * 10) / 10,
-      quantity: item.quantity?.final?.value || item.quantity?.llm?.value || 1,
-      unit: item.quantity?.final?.unit || item.quantity?.llm?.unit || 'serving',
+      quantity: item.displayQuantity?.final?.value || item.displayQuantity?.llm?.value || 1,
+      unit: item.displayQuantity?.final?.unit || item.displayQuantity?.llm?.unit || 'piece',
     }));
 
     const totalNutrition = {

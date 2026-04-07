@@ -35,7 +35,38 @@ const compositeDishMappingSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     }
-  }]
+  }],
+  visibleComponents: {
+    type: [String],
+    default: []
+  },
+  gravyType: {
+    type: String,
+    enum: ['dry', 'semi', 'gravy', null],
+    default: null
+  },
+  totalGrams: {
+    type: Number,
+    default: null
+  },
+  reviewed: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  dataSource: {
+    type: String,
+    enum: ['MANUAL', 'LLM'],
+    default: 'MANUAL'
+  },
+  llmModel: {
+    type: String,
+    default: null
+  },
+  llmGeneratedAt: {
+    type: Date,
+    default: null
+  }
 }, {
   timestamps: true
 });

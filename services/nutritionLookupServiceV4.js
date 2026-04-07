@@ -56,112 +56,110 @@ async function dbLookup(item) {
 }
 
 /**
- * Step 2.25: Decompose composite dishes into components using the mapping collection.
- *
- * Checks each item's name against composite_dish_mappings (by dishName or aliases, case-insensitive).
- * If matched, replaces the single item with multiple component items using ratio-based gram splits.
- *
- * Quantization logic (for eggs etc.):
- *   - Components with quantization: rawGrams rounded to nearest unit (min 1 unit)
- *   - Components with getRemainder: gets totalGrams minus sum of quantized components
- *   - Normal components: totalGrams × ratio
+ * Cache an LLM-generated composite decomposition to the database for future review.
+ * Stores visibleComponents and gravyType for context.
  */
-// Module-level cache for composite dish mappings
-let mappingsCache = null;
-let mappingsCacheTime = 0;
-const MAPPINGS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-async function loadMappings() {
-  const now = Date.now();
-  if (mappingsCache && (now - mappingsCacheTime) < MAPPINGS_CACHE_TTL) {
-    return mappingsCache;
-  }
-  mappingsCache = await CompositeDishMapping.find({}).lean();
-  mappingsCacheTime = now;
-  return mappingsCache;
-}
-
-async function decomposeComposites(items) {
-  const mappings = await loadMappings();
-
-  // Build lookup: lowercase name/alias → mapping
-  const mappingLookup = new Map();
-  for (const m of mappings) {
-    mappingLookup.set(m.dishName.toLowerCase(), m);
-    for (const alias of (m.aliases || [])) {
-      mappingLookup.set(alias.toLowerCase(), m);
-    }
-  }
-
-  const result = [];
-
-  for (const item of items) {
-    const mapping = item.name ? mappingLookup.get(item.name.toLowerCase()) : null;
-
-    if (!mapping) {
-      // Not a composite dish — pass through unchanged
-      result.push(item);
-      continue;
-    }
-
-    const totalGrams = item.grams;
-    console.log(`[Composite] "${item.name}" (${totalGrams}g) → decomposing into ${mapping.components.length} components`);
-
-    // First pass: quantized components
-    const componentGrams = new Map();
-    let quantizedTotal = 0;
-
-    for (const comp of mapping.components) {
-      if (comp.quantization) {
-        const rawGrams = totalGrams * comp.ratio;
-        let finalGrams = Math.round(rawGrams / comp.quantization.unit) * comp.quantization.unit;
-        finalGrams = Math.max(finalGrams, comp.quantization.unit); // minimum 1 unit
-        componentGrams.set(comp.name, finalGrams);
-        quantizedTotal += finalGrams;
-      }
-    }
-
-    // Guard: if quantized total exceeds dish total, fall back to ratio-only
-    if (quantizedTotal > totalGrams) {
-      console.warn(`[Composite] Quantization overflow for "${item.name}" (${totalGrams}g): quantized=${quantizedTotal}g. Falling back to ratio-only.`);
-      componentGrams.clear();
-      quantizedTotal = 0;
-      for (const comp of mapping.components) {
-        componentGrams.set(comp.name, Math.round(totalGrams * comp.ratio));
-      }
+async function cacheLLMDecomposition(dishName, components, visibleComponents, gravyType, totalGrams) {
+  try {
+    const mapping = new CompositeDishMapping({
+      dishName,
+      aliases: [],
+      isComposite: true,
+      components: components.map(c => ({
+        name: c.name,
+        ratio: c.grams / totalGrams,
+        category: c.category
+      })),
+      visibleComponents: visibleComponents || [],
+      gravyType: gravyType || null,
+      totalGrams,
+      reviewed: false,
+      dataSource: 'LLM',
+      llmModel: 'gemini-2.5-flash',
+      llmGeneratedAt: new Date()
+    });
+    await mapping.save();
+    console.log(`[LLM Decompose] Cached mapping for "${dishName}" → ${components.length} components (gravyType=${gravyType || 'none'})`);
+  } catch (saveErr) {
+    // Duplicate or other error — non-fatal, just log
+    if (saveErr.code === 11000) {
+      console.log(`[LLM Decompose] Mapping for "${dishName}" already exists, skipping cache`);
     } else {
-      // Second pass: remainder components
-      for (const comp of mapping.components) {
-        if (comp.getRemainder) {
-          const remainderGrams = totalGrams - quantizedTotal;
-          componentGrams.set(comp.name, Math.max(remainderGrams, 0));
-        }
-      }
-
-      // Third pass: normal components (no quantization, no remainder)
-      for (const comp of mapping.components) {
-        if (!comp.quantization && !comp.getRemainder) {
-          componentGrams.set(comp.name, Math.round(totalGrams * comp.ratio));
-        }
-      }
+      console.warn(`[LLM Decompose] Failed to cache mapping for "${dishName}":`, saveErr.message);
     }
+  }
+}
 
-    // Create component items
-    for (const comp of mapping.components) {
-      const grams = componentGrams.get(comp.name);
-      console.log(`[Composite]   → "${comp.name}" (${grams}g, category: ${comp.category})`);
-      result.push({
-        name: comp.name,
-        category: comp.category,
-        grams,
-        parentDish: item.name,
-        parentGrams: totalGrams
-      });
+/**
+ * LLM fallback: decompose a composite dish into components when no curated mapping exists.
+ * Returns components in the same format as curated mappings: [{ name, ratio, category }]
+ */
+async function llmDecomposeComposite(dishName, totalGrams, visibleComponents = [], gravyType = null) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+  const visualContext = visibleComponents.length > 0
+    ? `\nVisible components from the photo: ${visibleComponents.join(', ')}\nUse these to determine the actual composition — do NOT assume a generic recipe. For example, if the photo shows "light vinaigrette" do not use mayonnaise.`
+    : '';
+
+  const gravyContext = gravyType
+    ? `\nGravy style: "${gravyType}". Use these ratio guidelines for curry-based dishes:
+- "dry" (bhuna/sukha): protein is 60-70%, dry masala coating is 10-20%, remaining is other vegetables/ingredients
+- "semi" (kadhai style): protein is 50-60%, thick sauce is 20-30%, remaining is vegetables/ingredients
+- "gravy" (liquid curry): gravy/sauce is 40-50%, protein is 30-40%, remaining is vegetables/ingredients`
+    : '';
+
+  const prompt = `You are a food decomposition specialist. Break down the composite dish "${dishName}" (${totalGrams}g total as served) into its individual components.
+${visualContext}${gravyContext}
+For each component, provide:
+- name: specific ingredient name (e.g., "Grilled Chicken Breast", not just "Chicken")
+- grams: estimated weight in grams (all component grams must sum to ${totalGrams})
+- category: one of: protein, grain, fat, vegetable, fruit, sauce, beverage, dairy, nuts, legumes, gravy, other
+
+Rules:
+- Be specific with ingredient names so they can be matched against a nutrition database
+- All component grams must sum to exactly ${totalGrams}
+- Use realistic amounts based on the visible components, not a generic recipe
+
+COOKING FAT (ghee, oil, butter absorbed during cooking):
+- For cooked dishes (biryani, pulao, fried rice, stir-fries), add a fixed 1 tbsp (14g) of cooking fat — regardless of total dish weight
+- For curries/gravies: the fat is already part of the gravy — do NOT add a separate oil component
+- For deep-fried items (pakora, samosa, fries): do NOT add oil — it's already in the fried item's nutrition
+- For salads: do NOT add oil separately — the dressing is its own visible component with its own nutrition
+
+DRESSING/SAUCE:
+- Only include if visible in the photo or typical for the dish
+- Name it specifically (e.g., "Caesar Dressing", "Light Vinaigrette", "Tahini Sauce") — not just "oil"
+- Typical amount: 1-2 tbsp (15-30g)
+
+Return ONLY raw JSON, no markdown, no explanation:
+[
+  { "name": "Component name", "grams": 100, "category": "protein" }
+]`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text().trim();
+  const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  const components = JSON.parse(jsonStr);
+
+  const decompTokens = {
+    input: result.response.usageMetadata?.promptTokenCount || null,
+    output: result.response.usageMetadata?.candidatesTokenCount || null
+  };
+  console.log(`[LLM Decompose] Tokens: input=${decompTokens.input}, output=${decompTokens.output}`);
+
+  // Validate grams sum to ~totalGrams, normalize if needed
+  const gramsSum = components.reduce((sum, c) => sum + c.grams, 0);
+  if (Math.abs(gramsSum - totalGrams) > totalGrams * 0.1) {
+    console.warn(`[LLM Decompose] Grams for "${dishName}" sum to ${gramsSum}, expected ${totalGrams}. Normalizing.`);
+    const factor = totalGrams / gramsSum;
+    for (const c of components) {
+      c.grams = Math.round(c.grams * factor);
     }
   }
 
-  return result;
+  return { components, tokens: decompTokens };
 }
+
 
 /**
  * Ask Gemini to estimate per-100g nutrition for multiple food items in a single call.
@@ -199,6 +197,13 @@ Rules:
 
   const result = await model.generateContent(prompt);
   const text = result.response.text().trim();
+
+  const batchTokens = {
+    input: result.response.usageMetadata?.promptTokenCount || null,
+    output: result.response.usageMetadata?.candidatesTokenCount || null
+  };
+  console.log(`[Batch LLM] Tokens: input=${batchTokens.input}, output=${batchTokens.output}`);
+
   const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const llmResults = JSON.parse(jsonStr);
 
@@ -214,7 +219,7 @@ Rules:
     }
   }
 
-  return nutritionMap;
+  return { nutritionMap, tokens: batchTokens };
 }
 
 /**
@@ -294,84 +299,126 @@ async function cacheLLMResults(nutritionMap, foodItems) {
 }
 
 /**
+ * Density table for converting ml → grams for liquid items.
+ * Most water-based liquids are ~1.0, so we only list outliers.
+ */
+const ML_TO_G_DENSITY = {
+  oil: 0.92, 'cooking oil': 0.92, 'olive oil': 0.92, 'coconut oil': 0.92, ghee: 0.93,
+  honey: 1.42, 'maple syrup': 1.32,
+  milk: 1.03, 'whole milk': 1.03, 'skim milk': 1.04, 'oat milk': 1.03,
+  cream: 0.99, 'heavy cream': 0.99,
+};
+
+function mlToGrams(ml, itemName) {
+  const lower = itemName.toLowerCase();
+  for (const [key, density] of Object.entries(ML_TO_G_DENSITY)) {
+    if (lower.includes(key)) return Math.round(ml * density);
+  }
+  return ml; // default: water-based liquids, 1ml ≈ 1g
+}
+
+/**
  * Calculate nutrition for all items in a meal.
  *
  * Flow:
- *   1. Normalize grams from Gemini's quantityAlternate
+ *   1. Normalize measureQuantity → grams (converting ml via density if needed)
  *   2. DB lookup all items in parallel
  *   3. Collect unique DB misses
  *   4. One batch LLM call for all misses (instead of N separate calls)
  *   5. Cache new items + apply results back to each item
  */
 async function calculateNutrition(items) {
-  // Step 1: Normalize grams
+  // Step 1: Extract grams from measureQuantity, converting ml if needed
   const normalizedItems = items.map(item => {
-    if (item.grams) return item;
-    const alt = item.quantityAlternate;
-    if (alt && alt.value) {
-      return { ...item, grams: alt.value };
+    const mq = item.measureQuantity;
+    if (mq && mq.value) {
+      const grams = mq.unit === 'ml' ? mlToGrams(mq.value, item.name) : mq.value;
+      return { ...item, grams };
     }
+    // Fallback for legacy items that might still have flat grams
+    if (item.grams) return item;
     return item;
   });
 
-  // Step 2: DB lookup all items in parallel
-  const dbResults = await Promise.all(
-    normalizedItems.map(item => dbLookup(item))
-  );
+  // Token usage accumulator
+  const tokenUsage = {
+    decomposition: { input: 0, output: 0 },
+    batchNutrition: { input: 0, output: 0 }
+  };
 
-  // Step 2.25: Decompose composite dishes that were DB misses
-  // Items that matched the DB stay as-is; only db_miss items get checked for composite decomposition
-  const afterDecomposition = [];
-  const compositeMisses = [];
-  for (const result of dbResults) {
-    if (result.nutritionSource !== 'db_miss') {
-      afterDecomposition.push(result);
-    } else {
-      compositeMisses.push(result);
+  // Step 2: Decompose composite dishes via LLM BEFORE DB lookup
+  // Composite items get broken into components; non-composite items pass through
+  const compositeItems = normalizedItems.filter(item => item.composite);
+  const nonCompositeItems = normalizedItems.filter(item => !item.composite);
+
+  const afterDecomposition = [...nonCompositeItems];
+
+  for (const item of compositeItems) {
+    try {
+      const decompStart = Date.now();
+      console.log(`[LLM Decompose] Decomposing "${item.name}" (gravyType=${item.gravyType || 'none'}) — calling LLM`);
+      const decompResult = await llmDecomposeComposite(item.name, item.grams, item.visibleComponents, item.gravyType);
+      const { components, tokens: decompTokens } = decompResult;
+      console.log(`[LLM Decompose] "${item.name}" decomposed into ${components.length} components [${Date.now() - decompStart}ms]`);
+
+      tokenUsage.decomposition.input += decompTokens.input || 0;
+      tokenUsage.decomposition.output += decompTokens.output || 0;
+
+      // Cache decomposition for review (non-blocking)
+      cacheLLMDecomposition(item.name, components, item.visibleComponents, item.gravyType, item.grams).catch(() => {});
+
+      for (const comp of components) {
+        const compGrams = comp.grams;
+        console.log(`[LLM Decompose]   → "${comp.name}" (${compGrams}g, category: ${comp.category})`);
+        afterDecomposition.push({
+          name: comp.name,
+          category: comp.category,
+          grams: compGrams,
+          parentDish: item.name,
+          parentGrams: item.grams,
+          displayQuantity: item.displayQuantity,
+          measureQuantity: item.measureQuantity
+        });
+      }
+    } catch (err) {
+      console.error(`[LLM Decompose] Failed for "${item.name}": ${err.message}. Falling through as single item.`);
+      afterDecomposition.push(item);
     }
   }
 
-  if (compositeMisses.length > 0) {
-    const decomposed = await decomposeComposites(compositeMisses);
-    // Decomposed items need their own DB lookup
-    const decomposedResults = await Promise.all(
-      decomposed.map(item => {
-        // If item has parentDish, it was decomposed from a composite — do fresh DB lookup
-        if (item.parentDish) {
-          return dbLookup(item);
-        }
-        // Not decomposed (no mapping match) — keep original db_miss result
-        return Promise.resolve(item);
-      })
-    );
-    afterDecomposition.push(...decomposedResults);
-  }
+  // Step 3: DB lookup all items (both non-composite and decomposed components)
+  const dbResults = await Promise.all(
+    afterDecomposition.map(item => dbLookup(item))
+  );
 
-  // Step 3: Collect unique DB misses (from post-decomposition results)
+  // Step 4: Collect unique DB misses from component lookups
   const dbMissNames = new Set();
   const dbMissItems = [];
-  for (const result of afterDecomposition) {
+  for (const result of dbResults) {
     if (result.nutritionSource === 'db_miss' && !dbMissNames.has(result.name)) {
       dbMissNames.add(result.name);
       dbMissItems.push({ name: result.name, category: result.category });
     }
   }
 
-  // Step 4: One batch LLM call for all unique misses
+  // Step 5: One batch LLM call for all unique misses (per-100g nutrition)
   let nutritionMap = {};
   let cachedFoods = {};
   if (dbMissItems.length > 0) {
     console.log(`[Batch LLM] ${dbMissItems.length} unique DB misses: ${dbMissItems.map(f => f.name).join(', ')}`);
     try {
-      nutritionMap = await batchLLMNutritionEstimate(dbMissItems);
+      const batchResult = await batchLLMNutritionEstimate(dbMissItems);
+      nutritionMap = batchResult.nutritionMap;
+      tokenUsage.batchNutrition.input += batchResult.tokens.input || 0;
+      tokenUsage.batchNutrition.output += batchResult.tokens.output || 0;
       cachedFoods = await cacheLLMResults(nutritionMap, dbMissItems);
     } catch (err) {
       console.error(`[Batch LLM Error]:`, err.message);
     }
   }
 
-  // Step 5: Apply LLM results to all db_miss items
-  const processedItems = afterDecomposition.map(result => {
+  // Step 6: Apply LLM results to all db_miss items
+  const processedItems = dbResults.map(result => {
     if (result.nutritionSource !== 'db_miss') return result;
 
     const llmData = nutritionMap[result.name];
@@ -409,7 +456,7 @@ async function calculateNutrition(items) {
 
   // Calculate totals
   const totalNutrition = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
-  const sourceBreakdown = { db: 0, llm_cached: 0, llm_fresh: 0, llm_error: 0, missing: 0 };
+  const sourceBreakdown = { db: 0, llm_cached: 0, llm_fresh: 0, llm_error: 0, missing: 0, recipe: 0 };
 
   for (const item of processedItems) {
     if (item.nutrition) {
@@ -439,7 +486,8 @@ async function calculateNutrition(items) {
       fromDatabase: sourceBreakdown.db + sourceBreakdown.llm_cached,
       fromLLM: sourceBreakdown.llm_fresh,
       errors: sourceBreakdown.llm_error + sourceBreakdown.missing
-    }
+    },
+    tokenUsage
   };
 }
 

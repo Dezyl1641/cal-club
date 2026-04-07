@@ -764,11 +764,34 @@ ITEM IDENTIFICATION
 Naming: Be specific when visually distinguishable (e.g., "jeera rice" not "rice", "sourdough bread" not "bread", "soba noodles" not "noodles"). Use general name when variant is unclear.
 
 Composite dish detection:
-If a food item has multiple substantial components cooked/mixed together or served in the same vessel (e.g., biryani, pasta with sauce, curry with protein, burrito, poke bowl, noodle bowls), set "composite": true. Otherwise set "composite": false.
+A dish is composite ONLY when two or more MAJOR food groups are mixed/cooked together inseparably:
+* Protein + carb base: biryani, fried rice with chicken/egg, pasta with meat sauce, burrito, poke bowl, noodle bowls with protein
+* Protein + gravy: chicken curry, paneer butter masala, fish curry, mutton korma
+* Salad with protein + dressing: chicken salad, Caesar salad
+Set "composite": true ONLY for these cases.
 
-Garnishes and minor toppings (coriander, sesame seeds, lemon wedge, fried onions) do not make a dish composite. Ignore them.
+NOT composite (set "composite": false) — even if they contain minor secondary ingredients:
+* Single food group dishes: dal, sambar, rasam, plain rice, raita, curd, salan, chutney, soup
+* Dishes where other ingredients are just seasoning/tadka/garnish: dal fry (just lentils + tadka), cucumber raita (just yogurt + garnish), jeera rice (just rice + cumin)
+* Fried/baked single items: pakora, samosa, dosa, idli, roti, bread
+* Beverages: lassi, buttermilk, smoothie, juice
+Rule of thumb: if the dish is primarily ONE food group with spices/seasoning, it is NOT composite.
 
-Do NOT break down composite dishes. Report them as a single item with total grams.
+For composite dishes only, add:
+1. "visibleComponents" array — list what you can see or infer. Be specific about:
+   * Type of protein (grilled chicken pieces, shredded chicken, paneer cubes, boiled egg)
+   * Type of base (leafy greens, rice, noodles, bread)
+   * Type of dressing/sauce (creamy white dressing, vinaigrette, mayo-based, curry gravy, tomato sauce)
+   * Any other visible ingredients (cucumber, tomato, corn, beans, cheese, croutons, nuts)
+
+2. "gravyType" — for curry/gravy-based composite dishes ONLY, classify as one of:
+   * "dry" — NO liquid pooling on the plate or around the pieces. Meat/protein pieces are coated in dry masala but plate stays clean. (e.g., chicken bhuna, sukha chicken, dry fry, pepper chicken dry)
+   * "semi" — SOME thick sauce visible between pieces but pieces are NOT submerged. Sauce clings to pieces but doesn't pool much. (e.g., kadhai paneer, chilli chicken)
+   * "gravy" — pieces clearly SUBMERGED in liquid sauce. Sauce pools visibly in the bowl/plate. (e.g., butter chicken, chicken korma, rogan josh, dal makhani with paneer)
+   * null — for non-curry composites (salads, biryani, pasta, wraps, bowls)
+   When in doubt between dry and semi, look at the plate: if the plate is clean around the pieces → "dry". If sauce is visible between/around pieces → "semi".
+
+For non-composite dishes, set "visibleComponents": [] and "gravyType": null.
 
 Do not break down items served in separate vessels or clearly occupying distinct areas of the plate — list them independently without parentheses.
 
@@ -803,7 +826,7 @@ Principles:
 * For scoopable/pourable foods, estimate area coverage on plate and convert to cups or bowl size.
 * When uncertain between two close quantities, choose the midpoint.
 
-Gram estimation — USE THESE REFERENCE WEIGHTS:
+WEIGHT/VOLUME ESTIMATION — USE THESE REFERENCE WEIGHTS:
 * 1 cup cooked rice = 150g
 * 1 cup cooked pasta = 140g
 * 1 medium chicken breast (boneless) = 120g
@@ -814,11 +837,13 @@ Gram estimation — USE THESE REFERENCE WEIGHTS:
 * 1 cup raw leafy vegetables = 30g
 * 1 cup cooked vegetables = 150g
 
-For volume-based items: 1 cup = 180g, small bowl = 150g, medium bowl = 250g, large bowl = 400g, 1 glass = 250ml, 1 tbsp = 15g.
+For volume-based items: 1 cup = 180g, small bowl = 150g, medium bowl = 250g, large bowl = 400g, 1 tbsp = 15g.
 
 For bone-in items, estimate total weight including bone.
 
-For composite dishes, estimate total grams of the entire dish as served.
+For composite dishes, estimate total weight of the entire dish as served.
+
+MEASURE UNIT: Use "g" (grams) for solid foods. Use "ml" (milliliters) for beverages, liquid soups, juices, milk, lassi, buttermilk, smoothies, coffee, tea, and oils. Reference volumes for ml: 1 glass = 250ml, 1 cup = 240ml, 1 small cup (chai) = 150ml, 1 tbsp = 15ml.
 
 PORTION SIZE CALIBRATION: Photos often make portions appear larger than they are. Apply these conservative estimates:
 * Single protein serving: 80-120g (not 200-300g)
@@ -827,7 +852,7 @@ PORTION SIZE CALIBRATION: Photos often make portions appear larger than they are
 * Gravy/sauce: 50-100g (not 200-300g)
 * Full single-person meal: typically 250-400g total
 
-When estimating grams, start from the lower end of typical ranges unless the portion clearly appears oversized.
+When estimating, start from the lower end of typical ranges unless the portion clearly appears oversized.
 
 OUTPUT
 Return ONLY raw JSON. No markdown, no explanation.
@@ -835,19 +860,39 @@ Return ONLY raw JSON. No markdown, no explanation.
 {
   "mealName": "Overall meal name",
   "items": [
-    { "name": "Item name", "quantity": "Estimated quantity", "grams": 0, "composite": false }
+    {
+      "name": "Item name",
+      "displayQuantity": { "value": 1, "unit": "cup" },
+      "measureQuantity": { "value": 150, "unit": "g" },
+      "composite": false,
+      "visibleComponents": [],
+      "gravyType": null
+    }
   ]
 }
+
+visibleComponents: only for composite items. List visible/inferable ingredients. Empty array for non-composite items.
+gravyType: "dry", "semi", or "gravy" for curry-based composites. null for everything else.
+
+displayQuantity: user-friendly quantity. MUST use one of these unit types:
+* Countable items: "rotis", "slices", "eggs", "pieces", "idlis", "puris", "tacos", "dumplings"
+* Volume: "cup", "small bowl", "medium bowl", "large bowl", "tbsp", "glass"
+* Descriptive: "boneless pieces", "bone-in pieces", "cubes", "fillet"
+NEVER use "serving" or "plate" as unit. Always pick a specific, meaningful unit from above.
+
+measureQuantity: actual weight or volume for nutrition calculation.
+* unit must be "g" for solids or "ml" for liquids/beverages.
 
 EXAMPLE
 
 {
   "mealName": "Indian Thali",
   "items": [
-    { "name": "Chicken Biryani", "quantity": "1 plate", "grams": 300, "composite": true },
-    { "name": "Dal", "quantity": "1 small bowl", "grams": 150, "composite": false },
-    { "name": "Roti", "quantity": "2 rotis", "grams": 60, "composite": false },
-    { "name": "Raita", "quantity": "0.5 small bowl", "grams": 75, "composite": false }
+    { "name": "Chicken Biryani", "displayQuantity": { "value": 1, "unit": "medium bowl" }, "measureQuantity": { "value": 300, "unit": "g" }, "composite": true, "visibleComponents": ["basmati rice", "bone-in chicken pieces", "fried onions", "ghee", "whole spices"], "gravyType": null },
+    { "name": "Chicken Bhuna", "displayQuantity": { "value": 1, "unit": "small bowl" }, "measureQuantity": { "value": 200, "unit": "g" }, "composite": true, "visibleComponents": ["bone-in chicken pieces", "thick dry masala coating", "onions"], "gravyType": "dry" },
+    { "name": "Dal", "displayQuantity": { "value": 1, "unit": "small bowl" }, "measureQuantity": { "value": 150, "unit": "g" }, "composite": false, "visibleComponents": [], "gravyType": null },
+    { "name": "Roti", "displayQuantity": { "value": 2, "unit": "rotis" }, "measureQuantity": { "value": 60, "unit": "g" }, "composite": false, "visibleComponents": [], "gravyType": null },
+    { "name": "Buttermilk", "displayQuantity": { "value": 1, "unit": "glass" }, "measureQuantity": { "value": 250, "unit": "ml" }, "composite": false, "visibleComponents": [], "gravyType": null }
   ]
 }
 
@@ -1176,27 +1221,33 @@ Return only valid JSON, no additional text.`;
 
   static async analyzeFoodCaloriesV4(imageUrl, hint, provider = 'gemini', userId = null, additionalData = {}) {
     try {
+      const pipelineStart = Date.now();
       console.log(`🤖 [V4] ─── Starting V4 pipeline (DB-first with per-item waterfall) ───`);
       console.log(`🤖 [V4] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}`);
 
       // Step 1: Enhanced Prompt 1 - Meal identification + itemType classification
+      const step1Start = Date.now();
       console.log(`🤖 [V4] Step 1: Enhanced Prompt 1 (with itemType classification)`);
       const quantityRaw = await this.analyzeQuantityWithGeminiV4(imageUrl, hint);
       const quantityParsed = this.parseAIResult(quantityRaw.response);
-      console.log(`🤖 [V4] Step 1 complete — ${quantityParsed.items.length} items identified, mealName="${quantityParsed.mealName}"`);
+      const step1Ms = Date.now() - step1Start;
+      console.log(`🤖 [V4] Step 1 complete — ${quantityParsed.items.length} items identified, mealName="${quantityParsed.mealName}" [${step1Ms}ms]`);
 
       quantityParsed.items.forEach((item, i) => {
         const composite = item.composite ? 'composite' : 'single';
-        const grams = item.grams || item.quantityAlternate?.value || 'N/A';
-        console.log(`🤖 [V4]   item[${i}]: "${item.name}" | ${composite} | grams=${grams}`);
+        const measure = item.measureQuantity ? `${item.measureQuantity.value}${item.measureQuantity.unit}` : 'N/A';
+        const display = item.displayQuantity ? `${item.displayQuantity.value} ${item.displayQuantity.unit}` : 'N/A';
+        console.log(`🤖 [V4]   item[${i}]: "${item.name}" | ${composite} | measure=${measure} | display=${display}`);
       });
 
       // Step 2: Per-item nutrition lookup with waterfall (USDA → IFCT → LLM cache → LLM)
+      const step2Start = Date.now();
       console.log(`🤖 [V4] Step 2: Per-item waterfall lookup (USDA → IFCT → cache → LLM)`);
       const NutritionLookupServiceV4 = require('./nutritionLookupServiceV4');
       const nutritionResult = await NutritionLookupServiceV4.calculateNutrition(quantityParsed.items);
+      const step2Ms = Date.now() - step2Start;
 
-      console.log(`🤖 [V4] Step 2 complete — ${nutritionResult.items.length} items processed`);
+      console.log(`🤖 [V4] Step 2 complete — ${nutritionResult.items.length} items processed [${step2Ms}ms]`);
       console.log(`🤖 [V4] Source breakdown: USDA=${nutritionResult.sourceBreakdown.usda}, IFCT=${nutritionResult.sourceBreakdown.ifct}, cached=${nutritionResult.sourceBreakdown.llm_cached}, fresh=${nutritionResult.sourceBreakdown.llm_fresh}, recipe=${nutritionResult.sourceBreakdown.recipe}`);
 
       nutritionResult.items.forEach((item, i) => {
@@ -1204,6 +1255,18 @@ Return only valid JSON, no additional text.`;
         const cal = item.nutrition?.calories || 0;
         console.log(`🤖 [V4]   result[${i}]: "${item.name}" | source=${source} | cal=${cal}`);
       });
+
+      // Collect all token usage
+      const step2Tokens = nutritionResult.tokenUsage || { decomposition: { input: 0, output: 0 }, batchNutrition: { input: 0, output: 0 } };
+      const allTokens = {
+        step1: quantityRaw.tokens,
+        decomposition: step2Tokens.decomposition,
+        batchNutrition: step2Tokens.batchNutrition,
+        total: {
+          input: (quantityRaw.tokens.input || 0) + step2Tokens.decomposition.input + step2Tokens.batchNutrition.input,
+          output: (quantityRaw.tokens.output || 0) + step2Tokens.decomposition.output + step2Tokens.batchNutrition.output
+        }
+      };
 
       // Save meal with enhanced tracking
       let savedMeal = null;
@@ -1220,7 +1283,7 @@ Return only valid JSON, no additional text.`;
               totalNutrition: nutritionResult.totalNutrition
             },
             additionalData,
-            quantityRaw.tokens
+            allTokens
           );
           console.log(`🤖 [V4] Meal saved: mealId=${savedMeal?._id}`);
         } catch (saveErr) {
@@ -1230,8 +1293,10 @@ Return only valid JSON, no additional text.`;
       }
 
       const coverage = nutritionResult.coverage;
+      const totalMs = Date.now() - pipelineStart;
       console.log(`🤖 [V4] Coverage: ${coverage.fromDatabase}/${coverage.total} from DB (${Math.round(coverage.fromDatabase / coverage.total * 100)}%)`);
-      console.log(`🤖 [V4] ─── V4 pipeline complete ───`);
+      console.log(`🤖 [V4] Tokens: step1=${allTokens.step1.input}+${allTokens.step1.output} | decomp=${allTokens.decomposition.input}+${allTokens.decomposition.output} | batch=${allTokens.batchNutrition.input}+${allTokens.batchNutrition.output} | total=${allTokens.total.input}+${allTokens.total.output}`);
+      console.log(`🤖 [V4] ─── V4 pipeline complete ─── [Total: ${totalMs}ms | Step1: ${step1Ms}ms | Step2: ${step2Ms}ms]`);
 
       return {
         calories: {
@@ -1244,7 +1309,7 @@ Return only valid JSON, no additional text.`;
         quantityResult: quantityParsed,
         sourceBreakdown: nutritionResult.sourceBreakdown,
         coverage: nutritionResult.coverage,
-        steps: { step1_tokens: quantityRaw.tokens }
+        tokens: allTokens
       };
     } catch (error) {
       console.error(`❌ [V4] Pipeline failed: ${error.message}`);
@@ -1679,26 +1744,28 @@ Return only valid JSON, no additional text.`;
     }
   }
 
-  static async saveMealDataForV4(userId, imageUrl, nutritionResult, additionalData = {}, tokens = { input: null, output: null }) {
+  static async saveMealDataForV4(userId, imageUrl, nutritionResult, additionalData = {}, tokens = {}) {
     try {
       const mealItems = nutritionResult.items.map((item, index) => {
         const nut = item.nutrition || {};
+        const dq = item.displayQuantity || {};
+        const mq = item.measureQuantity || {};
         return {
           id: `item_${Date.now()}_${index}`,
           name: { llm: item.name, final: null },
-          quantity: {
+          displayQuantity: {
             llm: {
-              value: item.quantity?.value || item.servingSize || 1,
-              unit: item.quantity?.unit || item.servingUnit || 'serving'
+              value: dq.value || 1,
+              unit: dq.unit || 'piece'
             },
             final: null
           },
-          quantityAlternate: {
+          measureQuantity: {
             llm: {
-              value: item.grams || item.quantityAlternate?.value || null,
-              unit: 'grams'
+              value: item.grams || mq.value || null,
+              unit: mq.unit || 'g'
             },
-            final: { value: null, unit: null }
+            final: null
           },
           nutrition: {
             calories: { llm: nut.calories || 0, final: nut.calories || 0 },
@@ -1711,7 +1778,9 @@ Return only valid JSON, no additional text.`;
           foodItemId: item.foodItemId || null,
           recipeId: item.recipeId || null,
           dataSourcePriority: this.getDataSourcePriority(item.nutritionSource),
-          grams: item.grams || null
+          parentDish: item.parentDish || null,
+          componentType: item.componentType || null,
+          proteinForm: item.proteinForm || null
         };
       });
 
@@ -1741,8 +1810,12 @@ Return only valid JSON, no additional text.`;
         items: mealItems,
         notes: additionalData.notes || `AI Analysis (V4 DB-first): ${nutritionResult.mealName}`,
         userApproved: false,
-        inputTokens: tokens.input,
-        outputTokens: tokens.output
+        tokens: {
+          step1: { input: tokens.step1?.input || null, output: tokens.step1?.output || null },
+          decomposition: { input: tokens.decomposition?.input || null, output: tokens.decomposition?.output || null },
+          batchNutrition: { input: tokens.batchNutrition?.input || null, output: tokens.batchNutrition?.output || null },
+          total: { input: tokens.total?.input || null, output: tokens.total?.output || null }
+        }
       };
 
       const meal = new Meal(mealData);
@@ -1795,7 +1868,8 @@ Return only valid JSON, no additional text.`;
         mealName: 'Unknown Meal',
         items: [{
           name: 'Unknown Item',
-          quantity: { value: 1, unit: 'serving' },
+          displayQuantity: { value: 1, unit: 'piece' },
+          measureQuantity: { value: 100, unit: 'g' },
           nutrition: {
             calories: calories || 0,
             protein: 0,

@@ -22,9 +22,13 @@ function createMealSnapshot(meal) {
     items: meal.items.map(item => ({
       id: item.id,
       name: { llm: item.name?.llm, final: item.name?.final },
-      quantity: {
-        llm: item.quantity?.llm,
-        final: item.quantity?.final
+      displayQuantity: {
+        llm: item.displayQuantity?.llm,
+        final: item.displayQuantity?.final
+      },
+      measureQuantity: {
+        llm: item.measureQuantity?.llm,
+        final: item.measureQuantity?.final
       },
       nutrition: {
         calories: { llm: item.nutrition?.calories?.llm, final: item.nutrition?.calories?.final },
@@ -155,25 +159,25 @@ async function updateMeal(req, res) {
       // Case 1: Quantity update (newQuantity is non-null, newItem is null)
       if (newQuantity !== null && newQuantity !== undefined && !newItem) {
         editType = 'QUANTITY_UPDATE';
-        
+
         // Track quantity change
         changes.push({
           itemId: itemId,
-          field: 'quantity',
-          previousValue: item.quantity.final?.value || item.quantity.llm?.value,
+          field: 'displayQuantity',
+          previousValue: item.displayQuantity.final?.value || item.displayQuantity.llm?.value,
           newValue: newQuantity
         });
-        
+
         // Determine old quantity: use final if it exists (subsequent update), otherwise use llm (first update)
-        const oldQuantity = (item.quantity.final?.value !== null && item.quantity.final?.value !== undefined)
-          ? item.quantity.final.value
-          : item.quantity.llm.value;
+        const oldQuantity = (item.displayQuantity.final?.value !== null && item.displayQuantity.final?.value !== undefined)
+          ? item.displayQuantity.final.value
+          : item.displayQuantity.llm.value;
         const ratio = newQuantity / oldQuantity;
 
-        // Update final quantity
-        item.quantity.final = {
+        // Update final displayQuantity
+        item.displayQuantity.final = {
           value: newQuantity,
-          unit: item.quantity.llm.unit
+          unit: item.displayQuantity.llm.unit
         };
 
         // Update final nutrition proportionally (only if not being updated directly)
@@ -279,7 +283,7 @@ async function updateMeal(req, res) {
         });
         
         // Get AI nutrition for the new item and updated meal name
-        const originalUnit = item.quantity.llm.unit;
+        const originalUnit = item.displayQuantity.llm.unit;
         const aiResult = await getNutritionForItem(newItem, meal.name, item.name.llm, originalUnit);
         
         // Store LLM input/output for audit
@@ -308,10 +312,10 @@ async function updateMeal(req, res) {
         item.name.final = newItem;
 
         
-        // Update final quantity if newQuantity is provided
+        // Update final displayQuantity if newQuantity is provided
         if (newQuantity !== null && newQuantity !== undefined) {
-          changes.push({ itemId, field: 'quantity', previousValue: item.quantity.final?.value, newValue: newQuantity });
-          item.quantity.final = {
+          changes.push({ itemId, field: 'displayQuantity', previousValue: item.displayQuantity.final?.value, newValue: newQuantity });
+          item.displayQuantity.final = {
             value: newQuantity,
             unit: quantityUnit
           };
@@ -582,7 +586,7 @@ function bulkEditItems(req, res) {
         currentItems: meal.items?.map(item => ({
           id: item.id,
           name: item.name?.llm || item.name?.final,
-          quantity: item.quantity?.llm?.value || item.quantity?.final?.value
+          displayQuantity: item.displayQuantity?.llm?.value || item.displayQuantity?.final?.value
         }))
       });
 
@@ -659,7 +663,7 @@ function bulkEditItems(req, res) {
         console.log('📝 [BULK_EDIT] Processing item update:', {
           itemId,
           currentName: currentItemName,
-          currentQuantity: item.quantity?.llm?.value || item.quantity?.final?.value,
+          currentDisplayQuantity: item.displayQuantity?.llm?.value || item.displayQuantity?.final?.value,
           newItem,
           newQuantity,
           treatingAsQuantityOnly: shouldTreatAsQuantityOnly
@@ -672,8 +676,8 @@ function bulkEditItems(req, res) {
           batchItems.push({
             originalName: item.name.llm,
             newName: newItem,
-            newQuantity: newQuantity !== null && newQuantity !== undefined ? newQuantity : item.quantity.llm.value,
-            unit: item.quantity.llm.unit,
+            newQuantity: newQuantity !== null && newQuantity !== undefined ? newQuantity : item.displayQuantity.llm.value,
+            unit: item.displayQuantity.llm.unit,
             isMainItem
           });
 
@@ -792,23 +796,23 @@ function bulkEditItems(req, res) {
             ? newQuantity 
             : aiItem.quantity.value;
 
-          const quantityUnit = newQuantity !== null && newQuantity !== undefined 
-            ? item.quantity.llm.unit
+          const quantityUnit = newQuantity !== null && newQuantity !== undefined
+            ? item.displayQuantity.llm.unit
             : aiItem.quantity.unit;
 
           // Track quantity change if provided
           if (newQuantity !== null && newQuantity !== undefined) {
             changes.push({
               itemId: itemId,
-              field: 'quantity',
-              previousValue: item.quantity.final?.value || item.quantity.llm?.value,
+              field: 'displayQuantity',
+              previousValue: item.displayQuantity.final?.value || item.displayQuantity.llm?.value,
               newValue: newQuantity
             });
           }
 
           // Update item name - use user-provided name, not AI suggestion
           item.name.final = newItem;
-          item.quantity.final = {
+          item.displayQuantity.final = {
             value: quantityValue,
             unit: quantityUnit
           };
@@ -830,11 +834,11 @@ function bulkEditItems(req, res) {
         } else if (newQuantity !== null && newQuantity !== undefined && !newItem) {
           // Case: Only quantity changed - calculate proportionally
           // Determine old quantity: use final if it exists (subsequent update), otherwise use llm (first update)
-          const oldQuantity = (item.quantity.final?.value !== null && item.quantity.final?.value !== undefined)
-            ? item.quantity.final.value
-            : item.quantity.llm.value;
+          const oldQuantity = (item.displayQuantity.final?.value !== null && item.displayQuantity.final?.value !== undefined)
+            ? item.displayQuantity.final.value
+            : item.displayQuantity.llm.value;
           const ratio = newQuantity / oldQuantity;
-          
+
           console.log('📝 [BULK_EDIT] Applying quantity-only update:', {
             itemId,
             oldQuantity,
@@ -849,15 +853,15 @@ function bulkEditItems(req, res) {
           // Track quantity change
           changes.push({
             itemId: itemId,
-            field: 'quantity',
+            field: 'displayQuantity',
             previousValue: oldQuantity,
             newValue: newQuantity
           });
 
-          // Update final quantity
-          item.quantity.final = {
+          // Update final displayQuantity
+          item.displayQuantity.final = {
             value: newQuantity,
-            unit: item.quantity.llm.unit
+            unit: item.displayQuantity.llm.unit
           };
 
           // Calculate new nutrition values proportionally
@@ -1169,7 +1173,7 @@ async function addItemToMeal(req, res) {
       let llmInput = null;
       let llmOutput = null;
       let itemName = data.name;
-      let quantity = data.quantity || { value: 1, unit: 'serving' };
+      let displayQuantity = data.displayQuantity || data.quantity || { value: 1, unit: 'piece' };
       let nutrition = data.nutrition;
       let updatedMealName = meal.name;
 
@@ -1177,20 +1181,20 @@ async function addItemToMeal(req, res) {
       if (!nutrition) {
         try {
           // Determine the unit to use for AI call
-          const originalUnit = quantity.unit || 'serving';
-          
+          const originalUnit = displayQuantity.unit || 'piece';
+
           // Call AI service to get nutrition information
           const aiResult = await getNutritionForItem(data.name, meal.name, null, originalUnit);
-          
+
           // Use AI-provided nutrition and quantity if not provided
           nutrition = aiResult.nutrition;
-          if (!data.quantity) {
-            quantity = aiResult.quantity;
+          if (!data.displayQuantity && !data.quantity) {
+            displayQuantity = aiResult.quantity;
           } else {
             // Use provided quantity but keep AI's unit if quantity unit not provided
-            quantity = {
-              value: data.quantity.value || aiResult.quantity.value,
-              unit: data.quantity.unit || aiResult.quantity.unit
+            displayQuantity = {
+              value: displayQuantity.value || aiResult.quantity.value,
+              unit: displayQuantity.unit || aiResult.quantity.unit
             };
           }
           
@@ -1211,10 +1215,10 @@ async function addItemToMeal(req, res) {
           // Store LLM input/output for audit
           if (aiResult.auditData) {
             llmInput = {
-              requestPayload: { 
-                itemName: data.name, 
-                currentMealName: meal.name, 
-                quantity: quantity 
+              requestPayload: {
+                itemName: data.name,
+                currentMealName: meal.name,
+                displayQuantity: displayQuantity
               },
               promptSent: aiResult.auditData.promptSent,
               provider: aiResult.auditData.provider,
@@ -1271,14 +1275,14 @@ async function addItemToMeal(req, res) {
           llm: itemName,
           final: itemName
         },
-        quantity: {
+        displayQuantity: {
           llm: {
-            value: quantity.value,
-            unit: quantity.unit
+            value: displayQuantity.value,
+            unit: displayQuantity.unit
           },
           final: {
-            value: quantity.value,
-            unit: quantity.unit
+            value: displayQuantity.value,
+            unit: displayQuantity.unit
           }
         },
         nutrition: {
@@ -1580,18 +1584,24 @@ async function cloneMeal(req, res) {
         llm: item.name?.llm || null,
         final: item.name?.final || null
       },
-      quantity: {
-        llm: item.quantity?.llm ? {
-          value: item.quantity.llm.value,
-          unit: item.quantity.llm.unit,
-          normalized: item.quantity.llm.normalized ? {
-            value: item.quantity.llm.normalized.value,
-            unit: item.quantity.llm.normalized.unit
-          } : undefined
+      displayQuantity: {
+        llm: item.displayQuantity?.llm ? {
+          value: item.displayQuantity.llm.value,
+          unit: item.displayQuantity.llm.unit
         } : undefined,
-        final: item.quantity?.final ? {
-          value: item.quantity.final.value,
-          unit: item.quantity.final.unit
+        final: item.displayQuantity?.final ? {
+          value: item.displayQuantity.final.value,
+          unit: item.displayQuantity.final.unit
+        } : { value: null, unit: null }
+      },
+      measureQuantity: {
+        llm: item.measureQuantity?.llm ? {
+          value: item.measureQuantity.llm.value,
+          unit: item.measureQuantity.llm.unit
+        } : undefined,
+        final: item.measureQuantity?.final ? {
+          value: item.measureQuantity.final.value,
+          unit: item.measureQuantity.final.unit
         } : { value: null, unit: null }
       },
       nutrition: {
