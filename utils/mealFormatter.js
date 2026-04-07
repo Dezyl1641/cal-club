@@ -29,10 +29,14 @@ const mealFormatter = {
     const ingredients = meal.items.map((item, index) => ({
       itemId: item.id,
       name: item.name?.final || item.name?.llm || 'Unknown Item',
-      quantity: String(item.quantity?.final?.value || item.quantity?.llm?.value || 0),
-      unit: item.quantity?.final?.unit || item.quantity?.llm?.unit || 'g',
-      quantityAlternate: String(item.quantityAlternate?.final?.value || item.quantityAlternate?.llm?.value || ''),
-      quantityAlternateUnit: item.quantityAlternate?.final?.unit || item.quantityAlternate?.llm?.unit || 'grams',
+      displayQuantity: {
+        value: item.displayQuantity?.final?.value || item.displayQuantity?.llm?.value || 1,
+        unit: item.displayQuantity?.final?.unit || item.displayQuantity?.llm?.unit || 'piece'
+      },
+      measureQuantity: {
+        value: item.measureQuantity?.final?.value || item.measureQuantity?.llm?.value || null,
+        unit: item.measureQuantity?.final?.unit || item.measureQuantity?.llm?.unit || 'g'
+      },
       calories: parseFloat((item.nutrition?.calories?.final || item.nutrition?.calories?.llm || 0).toFixed(1)),
       protein: parseFloat((item.nutrition?.protein?.final || item.nutrition?.protein?.llm || 0).toFixed(1)),
       carbs: parseFloat((item.nutrition?.carbs?.final || item.nutrition?.carbs?.llm || 0).toFixed(1)),
