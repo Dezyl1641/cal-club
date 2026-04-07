@@ -1,9 +1,7 @@
 const aiController = require('../controllers/aiController');
 
 const routes = {
-  'POST /ai/food-calories': aiController.foodCalories,
-  'POST /ai/food-calories-v2': aiController.foodCaloriesV2,
-  'POST /ai/food-calories-v3': aiController.foodCaloriesV3,
+  'POST /ai/food-calories': aiController.foodCaloriesV4,
   'POST /ai/food-calories-v4': aiController.foodCaloriesV4
 };
 
