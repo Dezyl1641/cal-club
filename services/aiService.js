@@ -76,9 +76,89 @@ class AiService {
   }
 
   /**
+   * Quick Add: text-only food parsing. Minimal prompt — just parse what the user typed.
+   */
+  static async analyzeQuantityFromText(hint) {
+    const modelName = 'gemini-2.5-flash';
+    console.log(`🤖 [QUICK-ADD-STEP1] Using model: ${modelName} for text parsing`);
+    const model = genAI.getGenerativeModel({
+      model: modelName,
+      generationConfig: { temperature: 0.1 }
+    });
+
+    const sanitizedHint = sanitizeUserInput(hint);
+
+    const prompt = `Parse this food description into structured JSON. Output ONLY what the user stated — do not add, expand, or infer extra items.
+
+Text: <user_input>${sanitizedHint}</user_input>
+
+COMPOSITE: set true ONLY when two or more of these are mixed/cooked together inseparably:
+* Protein + carb base: biryani, fried rice with chicken/egg, pasta with meat sauce, burrito, poke bowl
+* Protein + gravy: chicken curry, paneer butter masala, fish curry, mutton korma
+* Salad with protein + dressing: chicken salad, Caesar salad
+NOT composite — even if they contain minor secondary ingredients:
+* Single-ingredient dishes: dal, sambar, rasam, plain rice, raita, curd, chutney, soup
+* Dishes where other ingredients are just seasoning/tadka/garnish: dal fry, jeera rice, cucumber raita
+* Fried/baked single items: samosa, dosa, idli, roti, bread, pakora
+* Beverages and supplements: lassi, coffee, smoothie, protein powder
+
+GRAVY TYPE: for composite curry/gravy dishes, set gravyType to the most common preparation — "dry", "semi", or "gravy". null for non-curry composites (biryani, pasta, salads).
+
+visibleComponents: always set to []. This field is only used for image-based analysis.
+
+mealName: derive a concise, descriptive meal name from the user's input.
+
+QUANTITY & WEIGHT:
+The user's description is the primary signal. If they specify a size or amount ("big bowl", "half a roti", "2 glasses"), use that exactly.
+If no quantity stated, assume 1 standard serving.
+
+displayQuantity: reflect the user's own words. If they said "big bowl", use "big bowl". If they said "2 rotis", use "2 rotis". NEVER use "serving" or "plate".
+
+measureQuantity: convert to grams/ml using these references:
+1 roti/chapati = 30g, 1 paratha = 60g, 1 puri = 25g, 1 samosa = 60g
+1 idli = 40g, 1 dosa = 100g, 1 egg = 50g, 1 scoop protein = 30g, 1 slice bread = 30g
+Volume: 1 small bowl = 150g, 1 medium bowl = 250g, 1 large bowl = 400g, 1 cup = 180g, 1 tbsp = 15g
+Liquids: 1 glass = 250ml, 1 cup coffee/tea = 150ml
+For branded/packaged items, use the product's standard weight.
+MUST always have a numeric value — never null. Unit must be "g" for solids, "ml" for liquids. Never use "serving", "plate", "bowl", or any non-metric unit.
+
+{
+  "mealName": "Descriptive meal name",
+  "items": [
+    {
+      "name": "Item name",
+      "displayQuantity": { "value": 1, "unit": "cup" },
+      "measureQuantity": { "value": 150, "unit": "g" },
+      "composite": false,
+      "visibleComponents": [],
+      "gravyType": null
+    }
+  ]
+}
+
+Return only valid JSON, no additional text.`;
+
+    const result = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+    const response = await result.response;
+    const textResponse = response.text();
+    const tokens = {
+      input: result.response.usageMetadata?.promptTokenCount || null,
+      output: result.response.usageMetadata?.candidatesTokenCount || null
+    };
+
+    console.log(`🤖 [QUICK-ADD-STEP1] Response received, length: ${textResponse?.length || 0}`);
+    return { response: textResponse, tokens, provider: 'gemini', model: modelName };
+  }
+
+  /**
    * Enhanced Prompt 1 for V4: Adds itemType classification and category tagging
    */
   static async analyzeQuantityWithGeminiV4(imageUrl, hint) {
+    // Quick Add: text-only, no image — use a minimal text-parsing prompt
+    if (!imageUrl && hint) {
+      return this.analyzeQuantityFromText(hint);
+    }
+
     const modelName = 'gemini-2.5-flash';
     console.log(`🤖 [GEMINI-V4-STEP1] Using model: ${modelName} for enhanced quantity analysis`);
     const model = genAI.getGenerativeModel({
