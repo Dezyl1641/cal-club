@@ -1,10 +1,11 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const FoodItem = require('../models/schemas/FoodItem');
 const CompositeDishMapping = require('../models/schemas/CompositeDishMapping');
-const { matchFood } = require('./foodMatcher');
+const { matchFood, batchExactMatch } = require('./foodMatcher');
 const embeddingService = require('./embeddingService');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const flashModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 /**
  * Try to find a food item in the database.
@@ -95,7 +96,6 @@ async function cacheLLMDecomposition(dishName, components, visibleComponents, gr
  * Returns components in the same format as curated mappings: [{ name, ratio, category }]
  */
 async function llmDecomposeComposite(dishName, totalGrams, visibleComponents = [], gravyType = null) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const visualContext = visibleComponents.length > 0
     ? `\nVisible components from the photo: ${visibleComponents.join(', ')}\nUse these to determine the actual composition — do NOT assume a generic recipe. For example, if the photo shows "light vinaigrette" do not use mayonnaise.`
@@ -113,12 +113,20 @@ ${visualContext}${gravyContext}
 For each component, provide:
 - name: specific ingredient name (e.g., "Grilled Chicken Breast", not just "Chicken")
 - grams: estimated weight in grams (all component grams must sum to ${totalGrams})
+- displayQty: user-friendly quantity string (e.g., "1 cup", "3 boneless pieces", "2 tbsp", "1 small bowl"). Use the same unit conventions as a recipe — cups for rice/grains, pieces for countable protein, tbsp for sauces/oil, small bowl for gravies.
 - category: one of: protein, grain, fat, vegetable, fruit, sauce, beverage, dairy, nuts, legumes, gravy, other
 
 Rules:
 - Be specific with ingredient names so they can be matched against a nutrition database
 - All component grams must sum to exactly ${totalGrams}
 - Use realistic amounts based on the visible components, not a generic recipe
+- Keep components MINIMAL — typically 2-4 items. Do NOT list garnishes, spices, or aromatics as separate components.
+
+COMPONENT MERGING:
+- For curries: the gravy/sauce is ONE component. Absorb onions, tomatoes, ginger-garlic, cilantro, green chili, spices, and oil INTO the gravy. Do not list them separately. Example: "Chicken Curry Gravy" (not "Gravy" + "Cooked Onion" + "Cilantro" + "Green Chili" + "Spices")
+- For rice dishes: the rice is ONE component. Absorb fried onions, whole spices, and ghee INTO the rice. Example: "Biryani Rice with Ghee" (not "Rice" + "Fried Onions" + "Ghee" + "Whole Spices")
+- For salads: dressing is ONE component. Absorb oil, vinegar, herbs INTO the dressing.
+- The only separate components should be items from DIFFERENT food groups (protein vs carb vs gravy vs vegetable).
 
 COOKING FAT (ghee, oil, butter absorbed during cooking):
 - For cooked dishes (biryani, pulao, fried rice, stir-fries), add a fixed 1 tbsp (14g) of cooking fat — regardless of total dish weight
@@ -133,10 +141,10 @@ DRESSING/SAUCE:
 
 Return ONLY raw JSON, no markdown, no explanation:
 [
-  { "name": "Component name", "grams": 100, "category": "protein" }
+  { "name": "Component name", "grams": 100, "displayQty": "3 boneless pieces", "category": "protein" }
 ]`;
 
-  const result = await model.generateContent(prompt);
+  const result = await flashModel.generateContent(prompt);
   const text = result.response.text().trim();
   const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const components = JSON.parse(jsonStr);
@@ -168,8 +176,6 @@ Return ONLY raw JSON, no markdown, no explanation:
 async function batchLLMNutritionEstimate(foodItems) {
   if (foodItems.length === 0) return {};
 
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-
   const itemsList = foodItems.map((f, i) =>
     `${i + 1}. "${f.name}" (category: ${f.category || 'unknown'})`
   ).join('\n');
@@ -195,7 +201,7 @@ Rules:
 - Use standard nutritional reference values for cooked/prepared forms
 - Be accurate with your estimates`;
 
-  const result = await model.generateContent(prompt);
+  const result = await flashModel.generateContent(prompt);
   const text = result.response.text().trim();
 
   const batchTokens = {
@@ -353,42 +359,88 @@ async function calculateNutrition(items) {
 
   const afterDecomposition = [...nonCompositeItems];
 
-  for (const item of compositeItems) {
-    try {
-      const decompStart = Date.now();
-      console.log(`[LLM Decompose] Decomposing "${item.name}" (gravyType=${item.gravyType || 'none'}) — calling LLM`);
-      const decompResult = await llmDecomposeComposite(item.name, item.grams, item.visibleComponents, item.gravyType);
-      const { components, tokens: decompTokens } = decompResult;
-      console.log(`[LLM Decompose] "${item.name}" decomposed into ${components.length} components [${Date.now() - decompStart}ms]`);
+  // Decompose all composite items in parallel
+  if (compositeItems.length > 0) {
+    const decompResults = await Promise.all(compositeItems.map(async (item) => {
+      try {
+        const decompStart = Date.now();
+        console.log(`[LLM Decompose] Decomposing "${item.name}" (gravyType=${item.gravyType || 'none'}) — calling LLM`);
+        const decompResult = await llmDecomposeComposite(item.name, item.grams, item.visibleComponents, item.gravyType);
+        const { components, tokens: decompTokens } = decompResult;
+        console.log(`[LLM Decompose] "${item.name}" decomposed into ${components.length} components [${Date.now() - decompStart}ms]`);
 
-      tokenUsage.decomposition.input += decompTokens.input || 0;
-      tokenUsage.decomposition.output += decompTokens.output || 0;
+        // Cache decomposition for review (non-blocking)
+        cacheLLMDecomposition(item.name, components, item.visibleComponents, item.gravyType, item.grams).catch(() => {});
 
-      // Cache decomposition for review (non-blocking)
-      cacheLLMDecomposition(item.name, components, item.visibleComponents, item.gravyType, item.grams).catch(() => {});
-
-      for (const comp of components) {
-        const compGrams = comp.grams;
-        console.log(`[LLM Decompose]   → "${comp.name}" (${compGrams}g, category: ${comp.category})`);
-        afterDecomposition.push({
-          name: comp.name,
-          category: comp.category,
-          grams: compGrams,
-          parentDish: item.name,
-          parentGrams: item.grams,
-          displayQuantity: item.displayQuantity,
-          measureQuantity: item.measureQuantity
-        });
+        return {
+          tokens: decompTokens,
+          components: components.map(comp => {
+            console.log(`[LLM Decompose]   → "${comp.name}" (${comp.grams}g, category: ${comp.category})`);
+            // Parse displayQty string (e.g., "3 boneless pieces") into { value, unit }
+            let dqValue = comp.grams;
+            let dqUnit = 'g';
+            if (comp.displayQty) {
+              const match = comp.displayQty.match(/^([\d.]+)\s+(.+)$/);
+              if (match) {
+                dqValue = parseFloat(match[1]);
+                dqUnit = match[2];
+              } else {
+                dqUnit = comp.displayQty;
+                dqValue = 1;
+              }
+            }
+            return {
+              name: comp.name,
+              category: comp.category,
+              grams: comp.grams,
+              parentDish: item.name,
+              parentGrams: item.grams,
+              displayQuantity: { value: dqValue, unit: dqUnit },
+              measureQuantity: { value: comp.grams, unit: 'g' }
+            };
+          })
+        };
+      } catch (err) {
+        console.error(`[LLM Decompose] Failed for "${item.name}": ${err.message}. Falling through as single item.`);
+        return { tokens: { input: 0, output: 0 }, components: [item] };
       }
-    } catch (err) {
-      console.error(`[LLM Decompose] Failed for "${item.name}": ${err.message}. Falling through as single item.`);
-      afterDecomposition.push(item);
+    }));
+
+    for (const result of decompResults) {
+      tokenUsage.decomposition.input += result.tokens.input || 0;
+      tokenUsage.decomposition.output += result.tokens.output || 0;
+      afterDecomposition.push(...result.components);
     }
   }
 
-  // Step 3: DB lookup all items (both non-composite and decomposed components)
+  // Step 3: DB lookup — batch exact match first, then waterfall for misses
+  const itemNames = afterDecomposition.map(item => item.name).filter(Boolean);
+  const batchMatches = await batchExactMatch(itemNames);
+
   const dbResults = await Promise.all(
-    afterDecomposition.map(item => dbLookup(item))
+    afterDecomposition.map(item => {
+      const batchHit = item.name ? batchMatches.get(item.name) : null;
+      if (batchHit) {
+        // Exact match from batch — compute nutrition directly
+        const { food, confidence, strategy } = batchHit;
+        const grams = item.grams || 0;
+        const multiplier = grams / 100;
+        const nutrition = {
+          calories: Math.round(food.caloriesPer100g * multiplier),
+          protein: Math.round(food.proteinPer100g * multiplier * 10) / 10,
+          carbs: Math.round(food.carbsPer100g * multiplier * 10) / 10,
+          fat: Math.round(food.fatPer100g * multiplier * 10) / 10,
+          fiber: Math.round((food.fiberPer100g || 0) * multiplier * 10) / 10
+        };
+        const nutritionSource = food.dataSource === 'LLM' ? 'llm_cached' : 'db';
+        return Promise.resolve({
+          ...item, foodItemId: food._id, matchedName: food.name, dataSource: food.dataSource,
+          nutrition, nutritionSource, confidence, strategy, verified: food.verified
+        });
+      }
+      // No batch hit — fall through to per-item waterfall (case-insensitive, alias, semantic)
+      return dbLookup(item);
+    })
   );
 
   // Step 4: Collect unique DB misses from component lookups

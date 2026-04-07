@@ -101,6 +101,29 @@ async function matchFood(foodName, category = null, confidenceThreshold = 0.7) {
   return null;
 }
 
+/**
+ * Batch exact match: look up multiple food names in a single DB query.
+ * Returns a Map of foodName → { food, confidence, strategy }.
+ * Only finds exact (case-sensitive) matches. Remaining items need per-item waterfall.
+ */
+async function batchExactMatch(foodNames) {
+  const results = new Map();
+  if (!foodNames || foodNames.length === 0) return results;
+
+  const trimmed = foodNames.map(n => n.trim()).filter(Boolean);
+  const foods = await FoodItem.find({ name: { $in: trimmed } });
+
+  for (const food of foods) {
+    results.set(food.name, { food, confidence: 1.0, strategy: 'batch_exact' });
+    // Fire-and-forget usageCount increment
+    FoodItem.findByIdAndUpdate(food._id, { $inc: { usageCount: 1 } }, { new: false })
+      .exec().catch(() => {});
+  }
+
+  return results;
+}
+
 module.exports = {
   matchFood,
+  batchExactMatch,
 };
