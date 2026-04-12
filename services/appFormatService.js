@@ -332,44 +332,58 @@ class AppFormatService {
   }
 
   /**
-   * Format the hero section widget with LLM guidance text.
-   * For past days, always shows Evening Wrap with no phase tabs.
+   * Format the hero section widget with LLM guidance text for ALL phases.
+   * Returns a single hero_section widget with a `phases` array containing
+   * briefs for every available phase, so the client needs only one API call.
+   *
+   * For past days, returns only the Evening Wrap with no phase tabs.
    */
   static async formatHeroSectionWidget(userId, date, todayData, goals, clientPhase, regenerate, isPastDay) {
     try {
-      // Determine phase
-      let phase;
       let showPhaseTabs;
       let activePhaseTabs;
+      let phases;
 
       if (isPastDay) {
-        phase = 'evening';
         showPhaseTabs = false;
         activePhaseTabs = [];
+        // Past days: only evening phase
+        const brief = await HeroBriefService.getOrGenerateBrief(userId, date, 'evening', false);
+        phases = [{
+          phase: brief.phase,
+          headline: brief.headline,
+          guidanceText: brief.guidanceText
+        }];
       } else {
-        phase = validatePhase(clientPhase);
         showPhaseTabs = true;
-      }
 
-      // Generate or retrieve the brief
-      const brief = await HeroBriefService.getOrGenerateBrief(userId, date, phase, regenerate);
+        // First, ensure the current/client phase brief exists
+        const activePhase = validatePhase(clientPhase);
+        await HeroBriefService.getOrGenerateBrief(userId, date, activePhase, regenerate);
 
-      // Get tabs after generation so the current phase brief is included
-      if (!isPastDay) {
+        // Get all available phase tabs (includes cached past phases + current)
         activePhaseTabs = await HeroBriefService.getAvailablePhaseTabs(userId, date);
+
+        // Fetch briefs for ALL available phases in parallel
+        const briefPromises = activePhaseTabs.map(tab =>
+          HeroBriefService.getOrGenerateBrief(userId, date, tab.phase, false)
+        );
+        const briefs = await Promise.all(briefPromises);
+
+        phases = briefs.map(brief => ({
+          phase: brief.phase,
+          headline: brief.headline,
+          guidanceText: brief.guidanceText
+        }));
       }
 
       // Compute effective target (goal + exercise burn)
-      // Exercise burn comes from client via Apple Health; server defaults to 0
       const exerciseBurn = todayData.exerciseBurn || 0;
       const effectiveTarget = goals.dailyCalories + exerciseBurn;
 
       return {
         widgetType: 'hero_section',
         widgetData: {
-          phase: brief.phase,
-          headline: brief.headline,
-          guidanceText: brief.guidanceText,
           showPhaseTabs,
           activePhaseTabs,
           calories: {
@@ -381,7 +395,8 @@ class AppFormatService {
           protein: {
             consumed: parseFloat(todayData.totalProtein.toFixed(2)),
             goal: goals.dailyProtein
-          }
+          },
+          phases
         }
       };
     } catch (error) {
@@ -392,11 +407,8 @@ class AppFormatService {
       return {
         widgetType: 'hero_section',
         widgetData: {
-          phase: fallbackPhase,
-          headline: PHASE_HEADLINES[fallbackPhase],
-          guidanceText: PHASE_FALLBACKS[fallbackPhase],
           showPhaseTabs: !isPastDay,
-          activePhaseTabs: isPastDay ? [] : [fallbackPhase],
+          activePhaseTabs: isPastDay ? [] : [{ phase: fallbackPhase, label: 'Now' }],
           calories: {
             consumed: parseFloat((todayData?.totalCalories || 0).toFixed(2)),
             goal: goals?.dailyCalories || 2000,
@@ -406,7 +418,12 @@ class AppFormatService {
           protein: {
             consumed: parseFloat((todayData?.totalProtein || 0).toFixed(2)),
             goal: goals?.dailyProtein || 150
-          }
+          },
+          phases: [{
+            phase: fallbackPhase,
+            headline: PHASE_HEADLINES[fallbackPhase],
+            guidanceText: PHASE_FALLBACKS[fallbackPhase]
+          }]
         }
       };
     }
