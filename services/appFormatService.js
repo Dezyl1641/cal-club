@@ -357,24 +357,30 @@ class AppFormatService {
       } else {
         showPhaseTabs = true;
 
-        // First, ensure the current/client phase brief exists
+        // Generate/retrieve the active phase brief (supports regenerate)
         const activePhase = validatePhase(clientPhase);
-        await HeroBriefService.getOrGenerateBrief(userId, date, activePhase, regenerate);
+        const activeBrief = await HeroBriefService.getOrGenerateBrief(userId, date, activePhase, regenerate);
 
         // Get all available phase tabs (includes cached past phases + current)
         activePhaseTabs = await HeroBriefService.getAvailablePhaseTabs(userId, date);
 
-        // Fetch briefs for ALL available phases in parallel
-        const briefPromises = activePhaseTabs.map(tab =>
-          HeroBriefService.getOrGenerateBrief(userId, date, tab.phase, false)
+        // Fetch briefs for past phases in parallel, reuse the active phase brief
+        const otherTabs = activePhaseTabs.filter(tab => tab.phase !== activePhase);
+        const otherBriefs = await Promise.all(
+          otherTabs.map(tab => HeroBriefService.getOrGenerateBrief(userId, date, tab.phase, false))
         );
-        const briefs = await Promise.all(briefPromises);
 
-        phases = briefs.map(brief => ({
-          phase: brief.phase,
-          headline: brief.headline,
-          guidanceText: brief.guidanceText
-        }));
+        // Merge all briefs in tab order
+        const briefMap = new Map();
+        briefMap.set(activePhase, activeBrief);
+        for (const brief of otherBriefs) {
+          briefMap.set(brief.phase, brief);
+        }
+
+        phases = activePhaseTabs.map(tab => {
+          const brief = briefMap.get(tab.phase);
+          return { phase: brief.phase, headline: brief.headline, guidanceText: brief.guidanceText };
+        });
       }
 
       // Compute effective target (goal + exercise burn)
