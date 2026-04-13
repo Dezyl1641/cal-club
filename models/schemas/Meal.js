@@ -135,6 +135,10 @@ const mealSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Meal',
     default: null
+  },
+  pendingMealId: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true
@@ -145,5 +149,10 @@ mealSchema.index({ userId: 1, capturedAt: -1 });
 mealSchema.index({ userId: 1, deletedAt: 1 });
 mealSchema.index({ 'items.nutritionSource': 1 });
 mealSchema.index({ 'items.foodItemId': 1 });
+// Idempotency: one meal per (userId, pendingMealId) so retries don't double-log.
+mealSchema.index(
+  { userId: 1, pendingMealId: 1 },
+  { unique: true, partialFilterExpression: { pendingMealId: { $type: 'string' } } }
+);
 
 module.exports = mongoose.model('Meal', mealSchema, 'meals'); 

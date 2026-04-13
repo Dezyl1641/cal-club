@@ -13,11 +13,15 @@ function foodCaloriesV4(req, res) {
     }
 
     const provider = 'gemini';
+    const pendingMealId = typeof data.pendingMealId === 'string' && data.pendingMealId.trim().length > 0
+      ? data.pendingMealId.trim()
+      : null;
     const additionalData = {
       capturedAt: data.capturedAt ? new Date(data.capturedAt) : dateUtils.getCurrentDateTime(),
       width: data.width || null,
       height: data.height || null,
-      notes: data.notes || ''
+      notes: data.notes || '',
+      pendingMealId
     };
 
     try {

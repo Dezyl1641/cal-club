@@ -342,6 +342,26 @@ Return only valid JSON, no additional text.`;
       console.log(`🤖 [V4] ─── Starting V4 pipeline (DB-first with per-item waterfall) ───`);
       console.log(`🤖 [V4] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}`);
 
+      // Idempotency short-circuit: if client provided pendingMealId and we've already
+      // persisted a meal for (userId, pendingMealId), return it without re-running Gemini.
+      const pendingMealId = additionalData.pendingMealId || null;
+      if (userId && pendingMealId) {
+        const existing = await Meal.findOne({ userId, pendingMealId });
+        if (existing) {
+          console.log(`🤖 [V4] Idempotent hit — pendingMealId=${pendingMealId} already saved as ${existing._id}, skipping Gemini`);
+          return {
+            calories: null,
+            provider,
+            mealId: existing._id,
+            quantityResult: null,
+            sourceBreakdown: null,
+            coverage: null,
+            tokens: null,
+            idempotent: true
+          };
+        }
+      }
+
       // Step 1: Enhanced Prompt 1 - Meal identification + itemType classification
       const step1Start = Date.now();
       console.log(`🤖 [V4] Step 1: Enhanced Prompt 1 (with itemType classification)`);
@@ -728,6 +748,7 @@ Return only valid JSON, no additional text.`;
         items: mealItems,
         notes: additionalData.notes || `AI Analysis (V4 DB-first): ${nutritionResult.mealName}`,
         userApproved: false,
+        pendingMealId: additionalData.pendingMealId || null,
         tokens: {
           step1: { input: tokens.step1?.input || null, output: tokens.step1?.output || null },
           decomposition: { input: tokens.decomposition?.input || null, output: tokens.decomposition?.output || null },
