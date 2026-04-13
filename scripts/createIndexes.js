@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const FoodItem = require('../models/schemas/FoodItem');
 const Recipe = require('../models/schemas/Recipe');
+const Meal = require('../models/schemas/Meal');
 
 async function createIndexes() {
   try {
@@ -33,6 +34,19 @@ async function createIndexes() {
     const recipeIndexes = await Recipe.collection.getIndexes();
     console.log('\nRecipe indexes:');
     Object.keys(recipeIndexes).forEach(idx => {
+      console.log(`  - ${idx}`);
+    });
+
+    // syncIndexes() reconciles the collection's indexes with the schema —
+    // needed for the partial unique index on (userId, pendingMealId) to land
+    // on collections that were created before the field existed.
+    console.log('\nSyncing Meal indexes...');
+    await Meal.syncIndexes();
+    console.log('✓ Meal indexes synced');
+
+    const mealIndexes = await Meal.collection.getIndexes();
+    console.log('\nMeal indexes:');
+    Object.keys(mealIndexes).forEach(idx => {
       console.log(`  - ${idx}`);
     });
 
