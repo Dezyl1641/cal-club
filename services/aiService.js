@@ -342,6 +342,24 @@ Return only valid JSON, no additional text.`;
       console.log(`🤖 [V4] ─── Starting V4 pipeline (DB-first with per-item waterfall) ───`);
       console.log(`🤖 [V4] Input: imageUrl=${imageUrl ? 'yes' : 'no'}, hint=${hint ? `"${hint.substring(0, 80)}"` : 'no'}`);
 
+      // Idempotency short-circuit: if client provided pendingMealId and we've
+      // already persisted an ACTIVE meal for (userId, pendingMealId), return
+      // it without re-running Gemini. Soft-deleted meals are intentionally
+      // excluded so a user who deletes a meal and retries with the same id
+      // can re-analyze fresh.
+      const pendingMealId = additionalData.pendingMealId || null;
+      if (userId && pendingMealId) {
+        const existing = await Meal.findOne({ userId, pendingMealId, deletedAt: null });
+        if (existing) {
+          console.log(`🤖 [V4] Idempotent hit — pendingMealId=${pendingMealId} already saved as ${existing._id}, skipping Gemini`);
+          return {
+            mealId: existing._id,
+            provider,
+            idempotent: true
+          };
+        }
+      }
+
       // Step 1: Enhanced Prompt 1 - Meal identification + itemType classification
       const step1Start = Date.now();
       console.log(`🤖 [V4] Step 1: Enhanced Prompt 1 (with itemType classification)`);
@@ -728,6 +746,7 @@ Return only valid JSON, no additional text.`;
         items: mealItems,
         notes: additionalData.notes || `AI Analysis (V4 DB-first): ${nutritionResult.mealName}`,
         userApproved: false,
+        pendingMealId: additionalData.pendingMealId || null,
         tokens: {
           step1: { input: tokens.step1?.input || null, output: tokens.step1?.output || null },
           decomposition: { input: tokens.decomposition?.input || null, output: tokens.decomposition?.output || null },
@@ -737,7 +756,26 @@ Return only valid JSON, no additional text.`;
       };
 
       const meal = new Meal(mealData);
-      return await meal.save();
+      try {
+        return await meal.save();
+      } catch (err) {
+        // Race: another concurrent analyze for the same (userId, pendingMealId)
+        // won the insert between our findOne check and this save. The partial
+        // unique index rejected us with E11000. Return the winning row so the
+        // client sees a successful idempotent response instead of a 500.
+        if (err && err.code === 11000 && mealData.pendingMealId && mealData.userId) {
+          const winner = await Meal.findOne({
+            userId: mealData.userId,
+            pendingMealId: mealData.pendingMealId,
+            deletedAt: null
+          });
+          if (winner) {
+            console.log(`🤖 [V4] E11000 race recovered — returning winning mealId=${winner._id} for pendingMealId=${mealData.pendingMealId}`);
+            return winner;
+          }
+        }
+        throw err;
+      }
     } catch (error) {
       console.error('Failed to save meal data (V4):', error);
       throw new Error(`Failed to save meal data (V4): ${error.message}`);
