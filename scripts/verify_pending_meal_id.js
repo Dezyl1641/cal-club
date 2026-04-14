@@ -4,112 +4,173 @@ const Meal = require('../models/schemas/Meal');
 const AiService = require('../services/aiService');
 
 const FAKE_USER_ID = new mongoose.Types.ObjectId('ffffffffffffffffffffffff');
-const TEST_PENDING_ID = `verify-${Date.now()}`;
+
+// Helper to build a minimal Meal doc for tests.
+function buildMealDoc({ pendingMealId, deletedAt = null, name = 'verification-seed' }) {
+  return {
+    userId: FAKE_USER_ID,
+    pendingMealId,
+    deletedAt,
+    capturedAt: new Date(),
+    name,
+    items: [],
+    totalNutrition: {
+      calories: { llm: 100, final: 100 },
+      protein: { llm: 5, final: 5 },
+      carbs: { llm: 10, final: 10 },
+      fat: { llm: 2, final: 2 }
+    },
+    source: 'llm',
+    userApproved: false
+  };
+}
+
+async function cleanup() {
+  await Meal.deleteMany({ userId: FAKE_USER_ID });
+}
+
+async function recreateIdempotencyIndex() {
+  // The partialFilterExpression changed (now includes deletedAt: null).
+  // Drop any existing idempotency index so the new definition takes effect.
+  const indexes = await Meal.collection.getIndexes();
+  if (indexes['userId_1_pendingMealId_1']) {
+    await Meal.collection.dropIndex('userId_1_pendingMealId_1');
+    console.log('✓ dropped previous userId_1_pendingMealId_1 index');
+  }
+  await Meal.collection.createIndex(
+    { userId: 1, pendingMealId: 1 },
+    {
+      unique: true,
+      partialFilterExpression: {
+        pendingMealId: { $type: 'string' },
+        deletedAt: null
+      },
+      name: 'userId_1_pendingMealId_1'
+    }
+  );
+  console.log('✓ created userId_1_pendingMealId_1 index with deletedAt: null filter');
+}
+
+async function testIdempotentShortCircuit() {
+  const pendingMealId = `verify-short-${Date.now()}`;
+  const seeded = await Meal.create(buildMealDoc({ pendingMealId }));
+
+  const originalAnalyze = AiService.analyzeQuantityWithGeminiV4;
+  let geminiCalled = false;
+  AiService.analyzeQuantityWithGeminiV4 = async () => {
+    geminiCalled = true;
+    throw new Error('FAIL: Gemini was invoked but short-circuit should have skipped it');
+  };
+
+  const result = await AiService.analyzeFoodCaloriesV4(
+    null,
+    'should not reach gemini',
+    'gemini',
+    FAKE_USER_ID,
+    { pendingMealId }
+  );
+
+  AiService.analyzeQuantityWithGeminiV4 = originalAnalyze;
+
+  if (geminiCalled) throw new Error('Gemini was invoked — short-circuit failed');
+  if (!result.idempotent) throw new Error(`Expected idempotent=true, got ${JSON.stringify(result)}`);
+  if (String(result.mealId) !== String(seeded._id)) {
+    throw new Error(`Expected mealId=${seeded._id}, got ${result.mealId}`);
+  }
+  console.log('✓ [1/5] idempotent short-circuit returned active mealId without calling Gemini');
+}
+
+async function testUniqueIndexRejectsDuplicates() {
+  const pendingMealId = `verify-uniq-${Date.now()}`;
+  await Meal.create(buildMealDoc({ pendingMealId }));
+  try {
+    await Meal.create(buildMealDoc({ pendingMealId, name: 'dup' }));
+    throw new Error('Duplicate insert should have failed on unique index');
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+    console.log('✓ [2/5] unique index rejected duplicate insert (E11000)');
+  }
+}
+
+async function testPartialIndexAllowsNulls() {
+  const a = await Meal.create(buildMealDoc({ pendingMealId: null, name: 'null-a' }));
+  const b = await Meal.create(buildMealDoc({ pendingMealId: null, name: 'null-b' }));
+  await Meal.deleteMany({ _id: { $in: [a._id, b._id] } });
+  console.log('✓ [3/5] partial index allows multiple null pendingMealId rows');
+}
+
+// Fix #3: soft-deleted meal with matching pendingMealId must NOT block re-analyze
+async function testSoftDeletedAllowsReinsert() {
+  const pendingMealId = `verify-soft-${Date.now()}`;
+  const original = await Meal.create(buildMealDoc({ pendingMealId }));
+  // Soft-delete
+  original.deletedAt = new Date();
+  await original.save();
+
+  // Now a fresh save with the same pendingMealId should succeed — the
+  // soft-deleted row is excluded from the partial unique index.
+  const fresh = await Meal.create(buildMealDoc({ pendingMealId, name: 'fresh-after-delete' }));
+  if (!fresh._id) throw new Error('Expected fresh insert to succeed after soft-delete');
+  if (String(fresh._id) === String(original._id)) {
+    throw new Error('Fresh insert returned the soft-deleted _id — should be a new row');
+  }
+  console.log('✓ [4/5] soft-deleted row drops out of partial index; fresh insert succeeds');
+}
+
+// Fix #1: race condition — saveMealDataForV4 must recover from E11000 by
+// returning the winning row instead of throwing a 500.
+async function testE11000Recovery() {
+  const pendingMealId = `verify-race-${Date.now()}`;
+  const winner = await Meal.create(buildMealDoc({ pendingMealId, name: 'winner' }));
+
+  // Simulate the losing side of the race: the findOne short-circuit missed
+  // (because it ran just before the winner's save committed), so we land
+  // in saveMealDataForV4 which will hit E11000 on save and recover.
+  const nutritionResult = {
+    mealName: 'Race loser',
+    items: [],
+    totalNutrition: { calories: 50, protein: 2, carbs: 5, fat: 1 }
+  };
+  const saved = await AiService.saveMealDataForV4(
+    FAKE_USER_ID,
+    null,
+    nutritionResult,
+    { pendingMealId, capturedAt: new Date() }
+  );
+
+  if (String(saved._id) !== String(winner._id)) {
+    throw new Error(`E11000 recovery should have returned winner=${winner._id}, got ${saved._id}`);
+  }
+  // Also verify we didn't accidentally create a second row
+  const count = await Meal.countDocuments({ userId: FAKE_USER_ID, pendingMealId });
+  if (count !== 1) {
+    throw new Error(`Expected exactly 1 row after race recovery, found ${count}`);
+  }
+  console.log('✓ [5/5] E11000 race recovery returns the winning row, no duplicate created');
+}
 
 async function main() {
   await mongoose.connect(process.env.MONGO_URI_NEW || process.env.MONGO_URI);
   console.log('✓ connected to mongo');
 
-  await Meal.syncIndexes();
-  console.log('✓ Meal indexes synced');
-
-  const cleanup = async () => {
-    await Meal.deleteMany({ userId: FAKE_USER_ID, pendingMealId: { $regex: /^verify-/ } });
-  };
+  await recreateIdempotencyIndex();
   await cleanup();
 
   try {
-    // Seed an existing meal for this (userId, pendingMealId) to prove idempotent read path.
-    const seeded = await Meal.create({
-      userId: FAKE_USER_ID,
-      pendingMealId: TEST_PENDING_ID,
-      capturedAt: new Date(),
-      name: 'verification-seed',
-      items: [],
-      totalNutrition: {
-        calories: { llm: 100, final: 100 },
-        protein: { llm: 5, final: 5 },
-        carbs: { llm: 10, final: 10 },
-        fat: { llm: 2, final: 2 }
-      },
-      source: 'llm',
-      userApproved: false
-    });
-    console.log(`✓ seeded meal ${seeded._id} with pendingMealId=${TEST_PENDING_ID}`);
+    await testIdempotentShortCircuit();
+    await cleanup();
 
-    // Fail loudly if Gemini gets invoked — the short-circuit should prevent that.
-    const originalAnalyze = AiService.analyzeQuantityWithGeminiV4;
-    let geminiCalled = false;
-    AiService.analyzeQuantityWithGeminiV4 = async () => {
-      geminiCalled = true;
-      throw new Error('FAIL: Gemini was invoked but short-circuit should have skipped it');
-    };
+    await testUniqueIndexRejectsDuplicates();
+    await cleanup();
 
-    const result = await AiService.analyzeFoodCaloriesV4(
-      null,
-      'should not reach gemini',
-      'gemini',
-      FAKE_USER_ID,
-      { pendingMealId: TEST_PENDING_ID }
-    );
+    await testPartialIndexAllowsNulls();
+    await cleanup();
 
-    AiService.analyzeQuantityWithGeminiV4 = originalAnalyze;
+    await testSoftDeletedAllowsReinsert();
+    await cleanup();
 
-    if (geminiCalled) throw new Error('Gemini was invoked — short-circuit failed');
-    if (!result.idempotent) throw new Error(`Expected idempotent=true, got ${JSON.stringify(result)}`);
-    if (String(result.mealId) !== String(seeded._id)) {
-      throw new Error(`Expected mealId=${seeded._id}, got ${result.mealId}`);
-    }
-    console.log(`✓ idempotent short-circuit returned mealId=${result.mealId} without calling Gemini`);
-
-    // Also verify the unique index is in place and prevents duplicate inserts.
-    try {
-      await Meal.create({
-        userId: FAKE_USER_ID,
-        pendingMealId: TEST_PENDING_ID,
-        capturedAt: new Date(),
-        name: 'dup',
-        items: [],
-        totalNutrition: {
-          calories: { llm: 0, final: 0 },
-          protein: { llm: 0, final: 0 },
-          carbs: { llm: 0, final: 0 },
-          fat: { llm: 0, final: 0 }
-        }
-      });
-      throw new Error('Duplicate insert should have failed on unique index');
-    } catch (err) {
-      if (err.code !== 11000) throw err;
-      console.log('✓ unique index rejected duplicate insert (E11000)');
-    }
-
-    // Verify null pendingMealId does NOT trip the partial index (two nulls coexist).
-    const nullA = await Meal.create({
-      userId: FAKE_USER_ID,
-      capturedAt: new Date(),
-      name: 'null-a',
-      items: [],
-      totalNutrition: {
-        calories: { llm: 0, final: 0 },
-        protein: { llm: 0, final: 0 },
-        carbs: { llm: 0, final: 0 },
-        fat: { llm: 0, final: 0 }
-      }
-    });
-    const nullB = await Meal.create({
-      userId: FAKE_USER_ID,
-      capturedAt: new Date(),
-      name: 'null-b',
-      items: [],
-      totalNutrition: {
-        calories: { llm: 0, final: 0 },
-        protein: { llm: 0, final: 0 },
-        carbs: { llm: 0, final: 0 },
-        fat: { llm: 0, final: 0 }
-      }
-    });
-    console.log('✓ partial index allows multiple null pendingMealId rows');
-    await Meal.deleteMany({ _id: { $in: [nullA._id, nullB._id] } });
+    await testE11000Recovery();
+    await cleanup();
 
     console.log('\n✅ all checks passed');
   } finally {

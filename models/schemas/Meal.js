@@ -149,10 +149,19 @@ mealSchema.index({ userId: 1, capturedAt: -1 });
 mealSchema.index({ userId: 1, deletedAt: 1 });
 mealSchema.index({ 'items.nutritionSource': 1 });
 mealSchema.index({ 'items.foodItemId': 1 });
-// Idempotency: one meal per (userId, pendingMealId) so retries don't double-log.
+// Idempotency: one ACTIVE meal per (userId, pendingMealId) so retries don't
+// double-log. Soft-deleted meals drop out of the partial filter so a user
+// who deletes a meal and retries with the same pendingMealId can re-analyze
+// without hitting E11000 on the index.
 mealSchema.index(
   { userId: 1, pendingMealId: 1 },
-  { unique: true, partialFilterExpression: { pendingMealId: { $type: 'string' } } }
+  {
+    unique: true,
+    partialFilterExpression: {
+      pendingMealId: { $type: 'string' },
+      deletedAt: null
+    }
+  }
 );
 
 module.exports = mongoose.model('Meal', mealSchema, 'meals'); 

@@ -37,12 +37,23 @@ async function createIndexes() {
       console.log(`  - ${idx}`);
     });
 
-    // syncIndexes() reconciles the collection's indexes with the schema —
-    // needed for the partial unique index on (userId, pendingMealId) to land
-    // on collections that were created before the field existed.
-    console.log('\nSyncing Meal indexes...');
-    await Meal.syncIndexes();
-    console.log('✓ Meal indexes synced');
+    // Explicitly create only the new idempotency index. `syncIndexes()` would
+    // also DROP any index present on the collection but missing from the
+    // schema — silently removing ops-added perf indexes on prod. Avoid.
+    // createIndex is a no-op if the index already exists with the same spec.
+    console.log('\nCreating Meal idempotency index...');
+    await Meal.collection.createIndex(
+      { userId: 1, pendingMealId: 1 },
+      {
+        unique: true,
+        partialFilterExpression: {
+          pendingMealId: { $type: 'string' },
+          deletedAt: null
+        },
+        name: 'userId_1_pendingMealId_1'
+      }
+    );
+    console.log('✓ Meal idempotency index ready');
 
     const mealIndexes = await Meal.collection.getIndexes();
     console.log('\nMeal indexes:');
